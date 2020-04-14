@@ -39,7 +39,7 @@
 #define Dpy_duan_s      Dpy_duan_5
 #define Dpy_duan_e      (~(_Dpy_duan_A                        |_Dpy_duan_D|_Dpy_duan_E|_Dpy_duan_F|_Dpy_duan_G             ))
 #define Dpy_duan_t      (~(                                    _Dpy_duan_D|_Dpy_duan_E|_Dpy_duan_F|_Dpy_duan_G             ))
-#define Dpy_duan_void      (~(                        _Dpy_duan_C|_Dpy_duan_D|_Dpy_duan_E                                     ))
+#define Dpy_duan_v      (~(                        _Dpy_duan_C|_Dpy_duan_D|_Dpy_duan_E                                     ))
 #define Dpy_duan_r      (~(                                                _Dpy_duan_E            |_Dpy_duan_G             ))
 #define Dpy_duan_a      (~(_Dpy_duan_A|_Dpy_duan_B|_Dpy_duan_C            |_Dpy_duan_E|_Dpy_duan_F|_Dpy_duan_G             ))
 #define Dpy_duan_c      (~(_Dpy_duan_A                        |_Dpy_duan_D|_Dpy_duan_E|_Dpy_duan_F                         ))
@@ -74,6 +74,7 @@ const u16 duanma[] = {
   ,Dpy_duan_negative//横杠
 };
 
+//"factory m.mode"
 const u16 str_0[] = {
    19//这是字符串本组字符串的长度
   ,Dpy_duan_f
@@ -96,6 +97,8 @@ const u16 str_0[] = {
   ,Dpy_duan_null
   ,Dpy_duan_null
 };
+
+//"set 0.5v ref"
 const u16 str_1[] = {
    17//这是字符串本组字符串的长度
   ,Dpy_duan_s
@@ -117,6 +120,7 @@ const u16 str_1[] = {
   ,Dpy_duan_null
 };
 
+//"set 9-60v ref"
 const u16 str_2[] = {
    19//这是字符串本组字符串的长度
   ,Dpy_duan_s
@@ -140,6 +144,7 @@ const u16 str_2[] = {
   ,Dpy_duan_null
 };
 
+//"set 0.5a ref"
 const u16 str_3[] = {
    17//这是字符串本组字符串的长度
   ,Dpy_duan_s
@@ -161,6 +166,7 @@ const u16 str_3[] = {
   ,Dpy_duan_null
 };
 
+//"set 9-40a ref"
 const u16 str_4[] = {
    19//这是字符串本组字符串的长度
   ,Dpy_duan_s
@@ -184,6 +190,7 @@ const u16 str_4[] = {
   ,Dpy_duan_null
 };
 
+//"save"
 const u16 str_5[] = {
    6//这是字符串本组字符串的长度
   ,Dpy_duan_s
@@ -194,12 +201,13 @@ const u16 str_5[] = {
   ,Dpy_duan_null
 };
 
+//"cancel"
 const u16 str_6[] = {
    6//这是字符串本组字符串的长度
   ,Dpy_duan_c
   ,Dpy_duan_a
   ,Dpy_duan_n
-  ,Dpy_duan_s
+  ,Dpy_duan_c
   ,Dpy_duan_e
   ,Dpy_duan_l
 };

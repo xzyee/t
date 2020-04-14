@@ -22,13 +22,14 @@ u8 factory_mode_setV_or_setI;//工厂模式专用变量，0 = 设置电压（对
 
 u8 flashing_style[2] = {2,2};//flashing_style[1]常年 = 2，flashing_style[0] = 0是灭<->亮循环，=1是半亮<->全亮循环
 
-u8 main_x;//此变量为临时多用变量，只能在main线程内使用，不允许跨函数使用
+u8 main_u8x;//此变量为临时多用变量，只能在main线程内使用，不允许跨函数使用
 u16 main_u16x;//此变量为临时多用变量，只能在main线程内使用，不允许跨函数使用
 
 
-u8 t1,pos;
+static u8 t1;
+u8 pos;
 
-static void Init()
+static void Init();
 
 #pragma optimize = low
 /**
@@ -40,7 +41,7 @@ void main()
 {
   CLK_CKDIVR_HSIDIV = 0;//主时钟不分频
 
-void Init();
+  Init();
 
   asm("rim");//开全局中断
   
@@ -67,7 +68,7 @@ void Init();
   * 按住编码器再开机的，跳到工厂模式
   ******************************************************************************  
   */  
-  if(PA3I== 0){
+  if(PA3I == 0){
     pos = 0;
     showing_data[0] = 0x0000;
     showing_data[1] = Dpy_wei_1 & Dpy_duan_null;
@@ -84,7 +85,6 @@ void Init();
         if(btn_event== 0)continue;
         switch(btn_event){
         case 0x02://短按
-          
           goto FACTORY_MODE;
         case 0x03://长按
           if(PA3I){
@@ -103,29 +103,29 @@ void Init();
 START_UP:
 /******************************************************************************/
   {//读取EEPROM工厂模式的参数
-    main_x = 15;
+    main_u8x = 15;
     eeprom_read_addrx8();
     PWM_V_bias = eeprom_buf1;
     PWM_V_coefficient = eeprom_buf2;
     
-    main_x = 16;
+    main_u8x = 16;
     eeprom_read_addrx8();
     PWM_I_bias = eeprom_buf1;
     PWM_I_coefficient = eeprom_buf2;
     
-    main_x = 17;
+    main_u8x = 17;
     eeprom_read_addrx8();
     ADC_V_bias = eeprom_buf1;
     ADC_V_coefficient = eeprom_buf2;
     
-    main_x = 18;
+    main_u8x = 18;
     eeprom_read_addrx8();
     ADC_I_bias = eeprom_buf1;
     ADC_I_coefficient = eeprom_buf2;
   }
   
   {//读取EEPROM默认电压电流
-    main_x = 0;
+    main_u8x = 0;
     eeprom_read_addrx8();
     setV = eeprom_buf1;
     setI = eeprom_buf2;
@@ -137,7 +137,7 @@ START_UP:
   UI_time_out = 0;
   showing_data[0] = 0x0000;
   
-  main_x = 2;//传参给下面这个函数
+  main_u8x = 2;//传参给下面这个函数
   main_u16x = setV;//传参给下面这个函数
   display_left_3_digital();
   
@@ -145,7 +145,6 @@ START_UP:
   display_right_3_digital();
   
   while(1){//开机延迟5秒再输出电压
-    
     if(flashing_FSM){//亮
       HC595_data_mask[0] = 0xFFFF;
       HC595_data_mask[1] = 0xFFFF;
@@ -183,7 +182,7 @@ MAIN_UI:
   while(1){//默认主界面
     showing_data[0] = 0x0000;
     
-    main_x = 2;//传参给下面这个函数
+    main_u8x = 2;//传参给下面这个函数
     main_u16x = nowV;//传参给下面这个函数
     display_left_3_digital();
     
@@ -197,7 +196,7 @@ MAIN_UI:
         }
       }
       
-      main_x = flashing_style[flashing_FSM];//传参给下面这个函数
+      main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
       main_u16x = nowI;//传参给下面这个函数
       display_right_3_digital();
       
@@ -256,7 +255,7 @@ CONTINUOUS_ADJUSTMENT_MODE_V:
     setV = bmq_turn_mgr_seting_data;
     output_PWM_update = 1;
     
-    main_x = 2;
+    main_u8x = 2;
     main_u16x = nowI;//传参给下面这个函数
     display_right_3_digital();
     
@@ -265,7 +264,7 @@ CONTINUOUS_ADJUSTMENT_MODE_V:
       UI_time_out = 8;
       fp_bmq_turn_mgr_display = NULL;
       
-      main_x = flashing_style[flashing_FSM];//传参给下面这个函数
+      main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
       main_u16x = nowV;//传参给下面这个函数
       display_left_3_digital();
     }
@@ -273,7 +272,7 @@ CONTINUOUS_ADJUSTMENT_MODE_V:
     switch(btn_event){
     case 0x02://短按
       
-      main_x = 0;
+      main_u8x = 0;
       eeprom_write_unlock_addrx8();
       eeprom_buf1 = setV;
       eeprom_write();
@@ -304,7 +303,7 @@ CONTINUOUS_ADJUSTMENT_MODE_I:
     setI = bmq_turn_mgr_seting_data;
     output_PWM_update = 1;
     
-    main_x = 2;
+    main_u8x = 2;
     main_u16x = nowV;//传参给下面这个函数
     display_left_3_digital();
     
@@ -313,7 +312,7 @@ CONTINUOUS_ADJUSTMENT_MODE_I:
       UI_time_out = 8;
       fp_bmq_turn_mgr_display = NULL;
       
-      main_x = flashing_style[flashing_FSM];//传参给下面这个函数
+      main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
       main_u16x = nowI;//传参给下面这个函数
       display_right_3_digital();
     }
@@ -321,7 +320,7 @@ CONTINUOUS_ADJUSTMENT_MODE_I:
     switch(btn_event){
     case 0x02://短按
       
-      main_x = 0;
+      main_u8x = 0;
       eeprom_write_unlock_addrx8();
       eep_addr  +=  4;
       eeprom_buf1 = setI;
@@ -336,7 +335,7 @@ CONTINUOUS_ADJUSTMENT_MODE_I:
 SET_STORAGE://选中存取位
 /******************************************************************************/
 
-  main_x = 2;//传参给下面这个函数
+  main_u8x = 2;//传参给下面这个函数
   main_u16x = setV;//传参给下面这个函数
   display_left_3_digital();
   main_u16x = setI;//传参给下面这个函数
@@ -350,7 +349,7 @@ SET_STORAGE://选中存取位
   while(1)
   {
     main_u16x = 10;
-    main_x = flashing_style[flashing_FSM];//传参给下面这个函数
+    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
     display_left_1_digital();
     
     bmq_wait_event();
@@ -364,13 +363,13 @@ SET_STORAGE://选中存取位
 
     case 0x02://短按
       goto SETING_STORAGE_READ;
-	  
+    
     }
-	
+  
     FSM_Reverse();
     
     if(UI_timeout_timer())
-	{
+  {
       goto MAIN_UI;//5秒无动作
     }
   }
@@ -451,10 +450,10 @@ SETING_STORAGE_READ2:
   fp_bmq_turn_mgr_display = display_left_1_digital;
   
   while(1){
-    main_x=(u8)bmq_turn_mgr_seting_data;//传参给下面这个函数
+    main_u8x=(u8)bmq_turn_mgr_seting_data;//传参给下面这个函数
     eeprom_read_addrx8();
     
-    main_x = 2;//传参给下面这个函数
+    main_u8x = 2;//传参给下面这个函数
     main_u16x = eeprom_buf1;//传参给下面这个函数
     display_left_3_digital();
     main_u16x = eeprom_buf2;//传参给下面这个函数
@@ -469,7 +468,7 @@ SETING_STORAGE_READ2:
       setI = eeprom_buf2;
       output_PWM_update = 1;
       
-      main_x = 0;
+      main_u8x = 0;
       eeprom_write_unlock_addrx8();
       eeprom_write();
       eeprom_buf1 = eeprom_buf2;
@@ -492,7 +491,7 @@ set_V://选中电压
   showing_data[0] = Dpy_wei_0&Dpy_duan_negative;//横杠
   
   main_u16x = setI;//传参给下面这个函数
-  main_x = 2;//传参给下面这个函数
+  main_u8x = 2;//传参给下面这个函数
   display_right_3_digital();
   
   flashing_FSM = 0;//闪烁状态机
@@ -500,7 +499,7 @@ set_V://选中电压
   UI_time_out = 0;
   while(1){
     main_u16x = setV;//传参给下面这个函数
-    main_x = flashing_style[flashing_FSM];//传参给下面这个函数
+    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
     display_left_3_digital();
     
     bmq_wait_event();
@@ -549,7 +548,7 @@ seting_V://调节电压
       setV = bmq_turn_mgr_seting_data;
       output_PWM_update = 1;
       
-      main_x = 0;
+      main_u8x = 0;
       eeprom_write_unlock_addrx8();
       eeprom_buf1 = setV;
       eeprom_write();
@@ -572,7 +571,7 @@ SET_I://选中电流
   showing_data[0] = Dpy_wei_0&Dpy_duan_negative;//横杠
   
   main_u16x = setV;//传参给下面这个函数
-  main_x = 2;//传参给下面这个函数
+  main_u8x = 2;//传参给下面这个函数
   display_left_3_digital();
   
   //showV(setV,0);
@@ -581,7 +580,7 @@ SET_I://选中电流
   UI_time_out = 0;
   while(1){
     main_u16x = setI;//传参给下面这个函数
-    main_x = flashing_style[flashing_FSM];//传参给下面这个函数
+    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
     display_right_3_digital();
     
     bmq_wait_event();
@@ -630,7 +629,7 @@ SETING_I://调节电流
       setI = bmq_turn_mgr_seting_data;
       output_PWM_update = 1;
       
-      main_x = 0;
+      main_u8x = 0;
       eeprom_write_unlock_addrx8();
       eep_addr  +=  4;
       eeprom_buf1 = setI;
@@ -701,9 +700,9 @@ SETING_STORAGE_WRITE:
       chkbmq();
       if(btn_event== 0) continue;
       switch(btn_event){
-		  case 0x01://编码器正转
-		  case 0xFF://编码器反转
-			goto SETING_STORAGE_WRITE2;
+      case 0x01://编码器正转
+      case 0xFF://编码器反转
+      goto SETING_STORAGE_WRITE2;
       }
     }while(user_timer1);
   }
@@ -715,7 +714,7 @@ SETING_STORAGE_WRITE2:
   flashing_style[0] = 1;//半亮<->全亮闪烁模式
   UI_time_out = 0;
   
-  main_x = 2;
+  main_u8x = 2;
   main_u16x = setV;
   display_left_3_digital();
   main_u16x = setI;
@@ -732,7 +731,7 @@ SETING_STORAGE_WRITE2:
     switch(btn_event){
     case 0x02://短按
       
-      main_x=(u8)bmq_turn_mgr_seting_data;
+      main_u8x=(u8)bmq_turn_mgr_seting_data;
       eeprom_write_unlock_addrx8();
       eeprom_buf1 = setV;
       eeprom_write();
@@ -755,27 +754,27 @@ FACTORY_MODE://工厂模式
 
   seting_data[0] = 1;//最左边的数码管的数字
   
-  main_x = 10;
+  main_u8x = 10;
   eeprom_read_addrx8();
   seting_data[1] = eeprom_buf1;
   seting_data[2] = eeprom_buf2;
   
-  main_x = 11;
+  main_u8x = 11;
   eeprom_read_addrx8();
   seting_data[3] = eeprom_buf1;
   seting_data[4] = eeprom_buf2;
   
-  main_x = 12;
+  main_u8x = 12;
   eeprom_read_addrx8();
   seting_data[5] = eeprom_buf1;
   seting_data[6] = eeprom_buf2;
   
-  main_x = 13;
+  main_u8x = 13;
   eeprom_read_addrx8();
   seting_data[7] = eeprom_buf1;
   seting_data[8] = eeprom_buf2;
   
-  main_x = 14;
+  main_u8x = 14;
   eeprom_read_addrx8();
   seting_data[9] = eeprom_buf1;
   seting_data[10] = eeprom_buf2;
@@ -819,7 +818,7 @@ FACTORY_MODE_:
   pos = 0;
   while(1){
     main_u16x = seting_data[0];//传参给下面这个函数
-    main_x = flashing_style[flashing_FSM];//传参给下面这个函数
+    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
     display_left_1_digital();
     
     pos = show_str(str_list[LOW(seting_data[0])-1],pos);
@@ -914,7 +913,7 @@ FACTORY_MODE_SET_0_5V_OR_0_5A_REF:
   
   while(1){
     main_u16x = seting_data[1+factory_mode_setV_or_setI];//传参给下面这个函数
-    main_x = flashing_style[flashing_FSM];//传参给下面这个函数
+    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
     display_PWM_value();
     
     bmq_wait_event();
@@ -958,7 +957,7 @@ FACTORY_MODE_SET_9_60V_OR_9_40A_REF:
   
   while(1){
     main_u16x = seting_data[3+factory_mode_setV_or_setI];//传参给下面这个函数
-    main_x = flashing_style[flashing_FSM];//传参给下面这个函数
+    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
     display_left_3_digital();
     
     bmq_wait_event();
@@ -1019,7 +1018,7 @@ FACTORY_MODE_SET_9_60V_OR_9_40A_REF2:
   
   while(1){
     main_u16x = seting_data[4+factory_mode_setV_or_setI];//传参给下面这个函数
-    main_x = flashing_style[flashing_FSM];//传参给下面这个函数
+    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
     display_PWM_value();
     
     bmq_wait_event();
@@ -1071,7 +1070,7 @@ FACTORY_MODE_SAVE_OR_CANSEL:
       
       if(factory_mode_setV_or_setI==5){//存储参数
         
-        main_x = 10;
+        main_u8x = 10;
         eeprom_write_unlock_addrx8();
         
         pos = 1;

@@ -120,6 +120,7 @@ u8 smg_scan2 = 0;
 
 static u8 bmq_status1 = 1;
 static u8 bmq_status2 = 1;
+
 u8 bmq_turning = 0;
 u8 bmq_frist_down;
 u8 bmq_last_up;
@@ -139,7 +140,6 @@ u16 bmq_last2_time = 0x8000;
 #define coefficient_I_set 8270//数值越大，设定越高
 //*/
 
-
 //工厂模式的参数
 s16 PWM_V_bias;
 u16 PWM_V_coefficient;
@@ -150,7 +150,6 @@ u16 ADC_V_coefficient;
 s16 ADC_I_bias;
 u16 ADC_I_coefficient;
 
-
 u8 UI_time_out;
 
 u8 btn_event = 0;//按钮事件，0x01 = 编码器正转，0xFF = 编码器反转，02 = 按钮短按，03 = 按钮长按
@@ -160,7 +159,6 @@ u16 PWM = 0;
 u8 *eep_addr;
 
 u8 is_fan_need_to_speed_up = 0;
-
 
 void set_V_PWM()
 {
@@ -183,11 +181,11 @@ void set_brightness(u8 brightness,u16 mask)
   if(brightness <= 1){
     HC595_data_mask[1] = ~mask;
   }else{
-    HC595_data_mask[0] = 
+    HC595_data_mask[0] = 0xFFFF;
     HC595_data_mask[1] = 0xFFFF;
     return;
   }
-  if(brightness== 0){
+  if(brightness == 0){
     HC595_data_mask[0] = HC595_data_mask[1];
     return;
   }
@@ -217,7 +215,6 @@ u16 calculation_factory_coefficient(u16 a,u16 b,u16 c){
   /(b-5)          /*电压差*/
   );
 }
-
 
 #pragma optimize = low
 void calculation_factory_parameters()
@@ -265,7 +262,7 @@ void calculation_factory_parameters()
   );
   
   //PWM_I_coefficient += (PWM_I_coefficient/2400);//微调补偿
-  PWM_I_bias += (PWM_I_coefficient/2400);//微调补偿
+  PWM_I_bias += PWM_I_coefficient/2400;//微调补偿
   
   ADC_I_bias = calculation_factory_bias(
   seting_data[2+5]
@@ -280,7 +277,7 @@ void calculation_factory_parameters()
   );
   
   //ADC_I_coefficient-=(ADC_I_coefficient/2400);//微调补偿
-  ADC_I_bias-=(ADC_I_coefficient/2400);//微调补偿
+  ADC_I_bias -= ADC_I_coefficient/2400;//微调补偿
 }
 
 //求模运算，用main_u16x传参
@@ -294,8 +291,8 @@ u8 mod(){
 //str是字符串指针，pos是字符串的当前要显示的字符位置
 u8 show_str(const u16 *str,u8 pos)
 {
-  main_x = str[0];//字符串长度
-  if(main_x > 6)
+  main_u8x = str[0];//字符串长度
+  if(main_u8x > 6)
   {
     showing_data[1] = showing_data[2] & (~_Dpy_wei_2) | _Dpy_wei_1;
     showing_data[2] = showing_data[3] & (~_Dpy_wei_3) | _Dpy_wei_2;
@@ -304,10 +301,10 @@ u8 show_str(const u16 *str,u8 pos)
     showing_data[5] = showing_data[6] & (~_Dpy_wei_6) | _Dpy_wei_5;
     showing_data[6] = Dpy_wei_6 & str[pos+1];
     
-    if(++pos >= main_x)
-	{
-		pos = 0;
-	}
+    if(++pos >= main_u8x)
+    {
+    pos = 0;
+    }
   }
   else
   {
@@ -340,7 +337,7 @@ void display_left_1_digital()
 {
   showing_data[0] = Dpy_wei_0 & duanma[ (u8)main_u16x ];
   
-  set_brightness(main_x,_Dpy_wei_0);
+  set_brightness(main_u8x,_Dpy_wei_0);
 }
 
 //用main_u16x传参要显示的数值，用main_x传参亮度
@@ -359,7 +356,7 @@ void display_left_3_digital()
     showing_data[1] = Dpy_wei_1 & duanma[LOW(main_u16x)];
   }
   
-  set_brightness(main_x,_Dpy_wei_1 | _Dpy_wei_2 | _Dpy_wei_3);
+  set_brightness(main_u8x,_Dpy_wei_1 | _Dpy_wei_2 | _Dpy_wei_3);
 }
 
 //用main_u16x传参要显示的数值，用main_x传参亮度
@@ -382,7 +379,7 @@ void display_right_3_digital()
     showing_data[4] = Dpy_wei_4 & duanma[LOW(main_u16x)];
   }
   
-  set_brightness(main_x,_Dpy_wei_4 | _Dpy_wei_5 | _Dpy_wei_6);
+  set_brightness(main_u8x,_Dpy_wei_4 | _Dpy_wei_5 | _Dpy_wei_6);
 }
 
 
@@ -400,7 +397,7 @@ void display_PWM_value()
   showing_data[4] = Dpy_wei_4 & duanma[mod()];
   showing_data[3] = Dpy_wei_3 & duanma[mod()];
   
-  set_brightness(main_x,_Dpy_wei_3 | _Dpy_wei_4 | _Dpy_wei_5 | _Dpy_wei_6);
+  set_brightness(main_u8x,_Dpy_wei_3 | _Dpy_wei_4 | _Dpy_wei_5 | _Dpy_wei_6);
 }
 
 
@@ -455,55 +452,56 @@ void bmq_turn_mgr()
   if(fp_bmq_turn_mgr_display)
   {
     main_u16x = bmq_turn_mgr_seting_data;//传参给下面这个函数
-    main_x = flashing_style[flashing_FSM];//传参给下面这个函数
+    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
     fp_bmq_turn_mgr_display();
   }
   bmq_wait_event();
   
   switch(btn_event)
   {
-	  
+    
   case 0x01://编码器正转
     
     if(bmq_last2_time > 252)
-	{
-      main_x = 252;
+    {
+      main_u8x = 252;
     }
-	else
-	{
-      main_x = bmq_last2_time;
+    else
+    {
+      main_u8x = bmq_last2_time;
     }
     
-    bmq_turn_mgr_seting_data  +=  ((252-main_x)/bmq_turn_mgr_speed_coefficient) + 1;
+    bmq_turn_mgr_seting_data  +=  ((252-main_u8x)/bmq_turn_mgr_speed_coefficient) + 1;
     if(bmq_turn_mgr_seting_data > bmq_turn_mgr_number_upper_limit)
-	{
+    {
       bmq_turn_mgr_seting_data = bmq_turn_mgr_number_upper_limit;
     }
     
     flashing_FSM = 1;
     UI_time_out = 0;
     return;
-	
+  
   case 0xFF://编码器反转
     
     if(bmq_last2_time>252)
-	{
-      main_x = 252;
+    {
+      main_u8x = 252;
     }
-	else
-	{
-      main_x = bmq_last2_time;
+    else
+    {
+      main_u8x = bmq_last2_time;
     }
 
-    bmq_turn_mgr_seting_data -= ((252-main_x)/bmq_turn_mgr_speed_coefficient) + 1;
+    bmq_turn_mgr_seting_data -= ((252-main_u8x)/bmq_turn_mgr_speed_coefficient) + 1;
     if(bmq_turn_mgr_seting_data < bmq_turn_mgr_number_lower_limit)
-	{
+    {
       bmq_turn_mgr_seting_data = bmq_turn_mgr_number_lower_limit;
     }
     
     flashing_FSM = 1;
     UI_time_out = 0;
     return;
+	
   default:
     FSM_Reverse();
     return;
@@ -537,7 +535,7 @@ void factory_mode_seting_PWM()
     bmq_turn_mgr();
     
     if(btn_event == 0x02)
-	{
+    {
       factory_mode_seting_PWM_PWMdata = bmq_turn_mgr_seting_data;
           
       PWM = 0;
@@ -554,7 +552,7 @@ s16 eeprom_buf1;
 s16 eeprom_buf2;
 void eeprom_read_addrx8()
 {
-  eep_addr=(u8 *)(EEPROM_ADDRESS+(8*main_x));//用main_x传参确定地址
+  eep_addr=(u8 *)(EEPROM_ADDRESS+(8*main_u8x));//用main_x传参确定地址
   
   eeprom_buf1=*(s16 *)eep_addr;
   if(eeprom_buf1 != ((*(s16 *)(eep_addr+2))^0xADB5)){
@@ -572,7 +570,7 @@ void eeprom_write_unlock_addrx8(){
   FLASH_DUKR = 0x56;//EEPROM解锁密码
   while(FLASH_IAPSR_DUL == 0);//等待解密就绪
 
-  eep_addr=(u8 *)(EEPROM_ADDRESS+(8*main_x));//用main_x传参确定地址
+  eep_addr=(u8 *)(EEPROM_ADDRESS+(8*main_u8x));//用main_x传参确定地址
 }
 
 void eeprom_write(){
