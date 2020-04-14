@@ -24,7 +24,7 @@ extern u16 bmq_last2_time;
 #define coefficient_V_set 9880//数值越大，设定越高
 
 #define coefficient_I_set 8270//数值越大，设定越高
-//*/
+*/
 
 
 

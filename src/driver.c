@@ -1,6 +1,7 @@
 #include "iostm8s103f3.h"
-#include "my.h"
+#include "general.h"
 #include "it.h"
+#include "display.h"
 #include "main.h"
 
 
@@ -118,8 +119,8 @@ void hc595_update(){
 u8 smg_scan = 0;
 u8 smg_scan2 = 0;
 
-static u8 bmq_status1 = 1;
-static u8 bmq_status2 = 1;
+u8 bmq_status1 = 1;
+u8 bmq_status2 = 1;
 
 u8 bmq_turning = 0;
 u8 bmq_frist_down;
@@ -138,7 +139,7 @@ u16 bmq_last2_time = 0x8000;
 #define coefficient_V_set 9880//数值越大，设定越高
 
 #define coefficient_I_set 8270//数值越大，设定越高
-//*/
+*/
 
 //工厂模式的参数
 s16 PWM_V_bias;

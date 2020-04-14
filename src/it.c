@@ -1,13 +1,13 @@
 #include "iostm8s103f3.h"
-#include "my.h"
+#include "general.h"
 #include "driver.h"
 #include "main.h"
 
 static u8 btn_status = 1;
 static u8 btn_down_time = 0;
 
-static u16 _setV = 0;//TIM4线程专用
-static u16 _setI = 0;//TIM4线程专用
+u16 _setV = 0;//TIM4线程专用
+u16 _setI = 0;//TIM4线程专用
 
 static u16 output_I_limit = 500;
 static u16 _adc_buf[4];
@@ -46,7 +46,7 @@ void setI_update()
   PWM = 0;
   if(_setI){
     PWM = (u32)_setI * PWM_I_coefficient / 600;
-    PWM+ = PWM_I_bias;
+    PWM += PWM_I_bias;
     if( (s16)PWM < 0 )
     {
       PWM = 0;
