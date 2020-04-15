@@ -116,8 +116,7 @@ void hc595_update(){
   PA1O = 0;
 }
 
-u8 smg_scan = 0;
-u8 smg_scan2 = 0;
+
 
 u8 bmq_status1 = 1;
 u8 bmq_status2 = 1;
@@ -179,18 +178,21 @@ void set_I_PWM()
 
 void set_brightness(u8 brightness,u16 mask)
 {
-  if(brightness <= 1){
-    HC595_data_mask[1] = ~mask;
-  }else{
-    HC595_data_mask[0] = 0xFFFF;
-    HC595_data_mask[1] = 0xFFFF;
-    return;
-  }
-  if(brightness == 0){
-    HC595_data_mask[0] = HC595_data_mask[1];
-    return;
-  }
-  HC595_data_mask[0] = 0xFFFF;
+	if(brightness == FULLBRIGHT)
+    {
+	    HC595_data_mask[0] = 0xFFFF;
+	    HC595_data_mask[1] = 0xFFFF;
+    }
+	else if(brightness == WEAKBLINK) 
+    {
+        HC595_data_mask[1] = ~mask;
+        HC595_data_mask[0] = 0xFFFF;
+    }
+	else
+    {
+	    HC595_data_mask[1] = ~mask;
+	    HC595_data_mask[0] = HC595_data_mask[1];
+    }
 }
 
 
@@ -289,7 +291,7 @@ u8 mod(){
   return result;
 }
 
-//str是字符串指针，pos是字符串的当前要显示的字符位置
+//str是字符串指针，pos是字符串的当前要显示的字符位置，str[pos+1]，仅走字的情况
 u8 show_str(const u16 *str,u8 pos)
 {
   main_u8x = str[0];//字符串长度
@@ -308,7 +310,7 @@ u8 show_str(const u16 *str,u8 pos)
     }
   }
   else
-  {
+  { //不走字时，pos无用处
     showing_data[1] = Dpy_wei_1 & str[1];
     showing_data[2] = Dpy_wei_2 & str[2];
     showing_data[3] = Dpy_wei_3 & str[3];
@@ -442,7 +444,7 @@ void bmq_wait_event()
 }
 
 s16 bmq_turn_mgr_seting_data;
-u8 bmq_turn_mgr_speed_coefficient;
+u8  bmq_turn_mgr_speed_coefficient;
 s16 bmq_turn_mgr_number_upper_limit;
 s16 bmq_turn_mgr_number_lower_limit;
 void (*fp_bmq_turn_mgr_display)();
@@ -456,6 +458,7 @@ void bmq_turn_mgr()
     main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
     fp_bmq_turn_mgr_display();
   }
+  
   bmq_wait_event();
   
   switch(btn_event)
@@ -463,17 +466,11 @@ void bmq_turn_mgr()
     
   case 0x01://编码器正转
     
-    if(bmq_last2_time > 252)
-    {
-      main_u8x = 252;
-    }
-    else
-    {
-      main_u8x = bmq_last2_time;
-    }
-    
+    main_u8x = (bmq_last2_time > 252) ? 252 : bmq_last2_time;
+	
     bmq_turn_mgr_seting_data  +=  ((252-main_u8x)/bmq_turn_mgr_speed_coefficient) + 1;
-    if(bmq_turn_mgr_seting_data > bmq_turn_mgr_number_upper_limit)
+
+	if(bmq_turn_mgr_seting_data > bmq_turn_mgr_number_upper_limit)
     {
       bmq_turn_mgr_seting_data = bmq_turn_mgr_number_upper_limit;
     }
@@ -484,17 +481,11 @@ void bmq_turn_mgr()
   
   case 0xFF://编码器反转
     
-    if(bmq_last2_time>252)
-    {
-      main_u8x = 252;
-    }
-    else
-    {
-      main_u8x = bmq_last2_time;
-    }
+	main_u8x = (bmq_last2_time > 252) ? 252 : bmq_last2_time;
 
     bmq_turn_mgr_seting_data -= ((252-main_u8x)/bmq_turn_mgr_speed_coefficient) + 1;
-    if(bmq_turn_mgr_seting_data < bmq_turn_mgr_number_lower_limit)
+
+	if(bmq_turn_mgr_seting_data < bmq_turn_mgr_number_lower_limit)
     {
       bmq_turn_mgr_seting_data = bmq_turn_mgr_number_lower_limit;
     }
@@ -504,6 +495,7 @@ void bmq_turn_mgr()
     return;
 	
   default:
+  	
     FSM_Reverse();
     return;
   }
@@ -514,7 +506,7 @@ void factory_mode_seting_PWM()
 {
   flashing_FSM = 1;//闪烁状态机
   
-  flashing_style[0] = 1;//半亮<->全亮闪烁模式
+  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
   
   bmq_turn_mgr_seting_data = factory_mode_seting_PWM_PWMdata;
   bmq_turn_mgr_speed_coefficient = 1;

@@ -4,8 +4,6 @@
 extern u16 showing_data[];
 extern u16 HC595_data;
 extern u16 HC595_data_mask[];
-extern u8 smg_scan;
-extern u8 smg_scan2;
 
 extern u8 bmq_turning;
 extern u8 bmq_frist_down;

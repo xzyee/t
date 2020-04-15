@@ -179,4 +179,10 @@ typedef void              v;
 
 #define eeprom_write_lock() FLASH_IAPSR_DUL = 0
 
+enum
+{ STRONGBLINK = 0,
+  WEAKBLINK,
+  FULLBRIGHT
+};
+
 #endif //#ifndef GENARAL_H

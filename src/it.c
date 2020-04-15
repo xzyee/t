@@ -21,6 +21,9 @@ static u8 tim4_timer1 = 250;
 static u8 tim4_timer2 = 0;//此处放入非0值即可每25mS自动递减一次（TIM4专用）
 static u8 tim4_timer3 = 0;//此处放入非0值即可每25mS自动递减一次（TIM4专用）
 
+static u8 smg_scan = 0;
+static u8 smg_scan2 = 0;
+
 u8 user_timer1 = 0;//此处放入非0值即可每25mS自动递减一次
 
 

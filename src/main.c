@@ -21,7 +21,7 @@ s16 seting_data[11];
 
 u8 factory_mode_setV_or_setI;//工厂模式专用变量，0 = 设置电压（对应菜单项1和2），5 = 设置电流（对应菜单项3和4）。FLASH空间不足了，逼我做成代码复用....
 
-u8 flashing_style[2] = {2,2};//flashing_style[1]常年 = 2，flashing_style[0] = 0是灭<->亮循环，=1是半亮<->全亮循环
+u8 flashing_style[2] = {FULLBRIGHT,FULLBRIGHT}; //0=灭<->亮循环，1=半亮<->全亮循环,2=常亮
 
 u8 main_u8x;//此变量为临时多用变量，只能在main线程内使用，不允许跨函数使用
 u16 main_u16x;//此变量为临时多用变量，只能在main线程内使用，不允许跨函数使用
@@ -79,11 +79,11 @@ void main()
     showing_data[5] = Dpy_wei_5 & Dpy_duan_null;
     showing_data[6] = Dpy_wei_6 & Dpy_duan_null;
     while(1){
-      pos = show_str(str_0,pos);
+      pos = show_str(str_0,pos);//刷新显示
       
       user_timer1 = 10;
       do{
-        if(btn_event== 0)continue;
+        if(btn_event == 0) continue; //用户无动作
         switch(btn_event){
         case 0x02://短按
           goto FACTORY_MODE;
@@ -133,12 +133,12 @@ START_UP:
     output_PWM_update = 1;
   }
   
-  //flashing_style[0] = 0;//灭<->亮闪烁模式
+  //flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
   flashing_FSM = 1;
   UI_time_out = 0;
   showing_data[0] = 0x0000;
   
-  main_u8x = 2;//传参给下面这个函数
+  main_u8x = FULLBRIGHT;//传参给下面这个函数
   main_u16x = setV;//传参给下面这个函数
   display_left_3_digital();
   
@@ -177,13 +177,13 @@ MAIN_UI:
 /******************************************************************************/
   
   flashing_FSM = 0;//闪烁状态机
-  flashing_style[0] = 0;//灭<->亮闪烁模式
+  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
   UI_time_out = 0;
   pos = 0;
   while(1){//默认主界面
     showing_data[0] = 0x0000;
     
-    main_u8x = 2;//传参给下面这个函数
+    main_u8x = FULLBRIGHT;//传参给下面这个函数
     main_u16x = nowV;//传参给下面这个函数
     display_left_3_digital();
     
@@ -245,7 +245,7 @@ CONTINUOUS_ADJUSTMENT_MODE_V:
   pos = 0;
   
   flashing_FSM = 1;//闪烁状态机
-  flashing_style[0] = 1;//半亮<->全亮闪烁模式
+  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
   
   bmq_turn_mgr_seting_data = setV;
   bmq_turn_mgr_speed_coefficient = 12;
@@ -256,7 +256,7 @@ CONTINUOUS_ADJUSTMENT_MODE_V:
     setV = bmq_turn_mgr_seting_data;
     output_PWM_update = 1;
     
-    main_u8x = 2;
+    main_u8x = FULLBRIGHT;
     main_u16x = nowI;//传参给下面这个函数
     display_right_3_digital();
     
@@ -293,7 +293,7 @@ CONTINUOUS_ADJUSTMENT_MODE_I:
   pos = 0;
   
   flashing_FSM = 1;//闪烁状态机
-  flashing_style[0] = 1;//半亮<->全亮闪烁模式
+  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
   
   bmq_turn_mgr_seting_data = setI;
   bmq_turn_mgr_speed_coefficient = 12;
@@ -304,7 +304,7 @@ CONTINUOUS_ADJUSTMENT_MODE_I:
     setI = bmq_turn_mgr_seting_data;
     output_PWM_update = 1;
     
-    main_u8x = 2;
+    main_u8x = FULLBRIGHT;
     main_u16x = nowV;//传参给下面这个函数
     display_left_3_digital();
     
@@ -336,7 +336,7 @@ CONTINUOUS_ADJUSTMENT_MODE_I:
 SET_STORAGE://选中存取位
 /******************************************************************************/
 
-  main_u8x = 2;//传参给下面这个函数
+  main_u8x = FULLBRIGHT;//传参给下面这个函数
   main_u16x = setV;//传参给下面这个函数
   display_left_3_digital();
   main_u16x = setI;//传参给下面这个函数
@@ -345,7 +345,7 @@ SET_STORAGE://选中存取位
   //showV(setV,0);
   //showI(setI,0);
   flashing_FSM = 0;//闪烁状态机
-  flashing_style[0] = 0;//灭<->亮闪烁模式
+  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
   UI_time_out = 0;
   while(1)
   {
@@ -441,7 +441,7 @@ SETING_STORAGE_READ2:
 /******************************************************************************/
 
   flashing_FSM = 0;
-  flashing_style[0] = 1;//半亮<->全亮闪烁模式
+  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
   UI_time_out = 0;
   
   bmq_turn_mgr_seting_data = 1;
@@ -454,7 +454,7 @@ SETING_STORAGE_READ2:
     main_u8x=(u8)bmq_turn_mgr_seting_data;//传参给下面这个函数
     eeprom_read_addrx8();
     
-    main_u8x = 2;//传参给下面这个函数
+    main_u8x = FULLBRIGHT;//传参给下面这个函数
     main_u16x = eeprom_buf1;//传参给下面这个函数
     display_left_3_digital();
     main_u16x = eeprom_buf2;//传参给下面这个函数
@@ -492,11 +492,11 @@ set_V://选中电压
   showing_data[0] = Dpy_wei_0&Dpy_duan_negative;//横杠
   
   main_u16x = setI;//传参给下面这个函数
-  main_u8x = 2;//传参给下面这个函数
+  main_u8x = FULLBRIGHT;//传参给下面这个函数
   display_right_3_digital();
   
   flashing_FSM = 0;//闪烁状态机
-  flashing_style[0] = 0;//灭<->亮闪烁模式
+  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
   UI_time_out = 0;
   while(1){
     main_u16x = setV;//传参给下面这个函数
@@ -532,7 +532,7 @@ SETING_V://调节电压
 /******************************************************************************/
 
   flashing_FSM = 1;//闪烁状态机
-  flashing_style[0] = 1;//半亮<->全亮闪烁模式
+  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
   UI_time_out = 0;
   
   bmq_turn_mgr_seting_data = setV;
@@ -572,12 +572,12 @@ SET_I://选中电流
   showing_data[0] = Dpy_wei_0&Dpy_duan_negative;//横杠
   
   main_u16x = setV;//传参给下面这个函数
-  main_u8x = 2;//传参给下面这个函数
+  main_u8x = FULLBRIGHT;//传参给下面这个函数
   display_left_3_digital();
   
   //showV(setV,0);
   flashing_FSM = 0;//闪烁状态机
-  flashing_style[0] = 0;//灭<->亮闪烁模式
+  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
   UI_time_out = 0;
   while(1){
     main_u16x = setI;//传参给下面这个函数
@@ -614,7 +614,7 @@ SETING_I://调节电流
 /******************************************************************************/
 
   flashing_FSM = 1;//闪烁状态机
-  flashing_style[0] = 1;//半亮<->全亮闪烁模式
+  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
   UI_time_out = 0;
   
   bmq_turn_mgr_seting_data = setI;
@@ -712,10 +712,10 @@ SETING_STORAGE_WRITE:
 SETING_STORAGE_WRITE2:
 /******************************************************************************/
   flashing_FSM = 0;
-  flashing_style[0] = 1;//半亮<->全亮闪烁模式
+  flashing_style[0] = STRONGBLINK;//半亮<->全亮闪烁模式
   UI_time_out = 0;
   
-  main_u8x = 2;
+  main_u8x = FULLBRIGHT;
   main_u16x = setV;
   display_left_3_digital();
   main_u16x = setI;
@@ -779,7 +779,8 @@ FACTORY_MODE://工厂模式
   eeprom_read_addrx8();
   seting_data[9] = eeprom_buf1;
   seting_data[10] = eeprom_buf2;
-  
+
+  // trim something
   if(seting_data[3]<100 || seting_data[3]>600){
     seting_data[3] = 600;
   }
@@ -799,15 +800,15 @@ FACTORY_MODE://工厂模式
   seting_data[9] = 0;//9-40A之间选中的参考电流对应的PWM值
   seting_data[10] = 0;//9-40A之间选中的参考电流对应的ADC值
   */
-  flashing_style[0] = 0;//灭<->亮闪烁模式
+  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
   
 /******************************************************************************/  
-FACTORY_MODE2:
+FACTORY_MODE_PREV_MENU:
 /******************************************************************************/
   flashing_FSM = 0;
   
 /******************************************************************************/  
-FACTORY_MODE_:
+FACTORY_MODE_MENU:
 /******************************************************************************/
 
   showing_data[1] = Dpy_wei_1 & Dpy_duan_null;
@@ -816,24 +817,26 @@ FACTORY_MODE_:
   showing_data[4] = Dpy_wei_4 & Dpy_duan_null;
   showing_data[5] = Dpy_wei_5 & Dpy_duan_null;
   showing_data[6] = Dpy_wei_6 & Dpy_duan_null;
+  
   pos = 0;
   while(1){
-    main_u16x = seting_data[0];//传参给下面这个函数
+    main_u16x = seting_data[0];//菜单数字（1~6），传参给下面这个函数
     main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
     display_left_1_digital();
     
-    pos = show_str(str_list[LOW(seting_data[0])-1],pos);
+    pos = show_str(str_list[LOW(seting_data[0])-1],pos);//刷新显示
     
     bmq_wait_event();
     switch(btn_event){
+		
     case 0x01://编码器正转
       
       if(flashing_style[0]){//正在调节最左边的数码管
         pos = 0;
-        seting_data[0]++;
-        if(seting_data[0]>6)seting_data[0] = 6;
+        ++seting_data[0];
+        if(seting_data[0] > 6) seting_data[0] = 6;
         flashing_FSM = 1;
-        goto FACTORY_MODE_;
+        goto FACTORY_MODE_MENU;
       }else{
         switch(LOW(seting_data[0])){
         case 1:
@@ -857,14 +860,15 @@ FACTORY_MODE_:
         }
       }
       break;
+	  
     case 0xFF://编码器反转
       
       if(flashing_style[0]){//正在调节最左边的数码管
         pos = 0;
-        seting_data[0]--;
-        if(seting_data[0]<1)seting_data[0] = 1;
+        --seting_data[0];
+        if(seting_data[0] < 1) seting_data[0] = 1;
         flashing_FSM = 1;
-        goto FACTORY_MODE_;
+        goto FACTORY_MODE_MENU;
       }else{
         switch(LOW(seting_data[0])){
         case 1:
@@ -888,13 +892,13 @@ FACTORY_MODE_:
         }
       }
       break;
+	  
     case 0x02://短按
-      
-      
+            
       flashing_style[0] = !flashing_style[0];//切换：数值调整状态 <--> 项目选择状态
       
       break;
-    default:
+    default: //0x00,用户没有在规定时间内操作
       
       FSM_Reverse();
     }
@@ -908,7 +912,7 @@ FACTORY_MODE_SET_0_5V_OR_0_5A_REF:
   showing_data[1] = 0x0000;
   showing_data[2] = 0x0000;
   
-  flashing_style[0] = 0;//灭<->亮闪烁模式
+  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
   
   fp_display_PWM_value = NULL;
   
@@ -919,6 +923,7 @@ FACTORY_MODE_SET_0_5V_OR_0_5A_REF:
     
     bmq_wait_event();
     switch(btn_event){
+		
     case 0x02://短按
       
       factory_mode_seting_PWM_PWMdata = seting_data[1+factory_mode_setV_or_setI];
@@ -931,14 +936,15 @@ FACTORY_MODE_SET_0_5V_OR_0_5A_REF:
         seting_data[2] = nowV_16bit_ADC_result;
       }
       goto FACTORY_MODE_SET_0_5V_OR_0_5A_REF;
+	  
     case 0x01://编码器正转
     case 0xFF://编码器反转
       
-      goto FACTORY_MODE2;
+      goto FACTORY_MODE_PREV_MENU;
+	
     default:
       FSM_Reverse();
     }
-    
   }
 
 /******************************************************************************/  
@@ -946,15 +952,20 @@ FACTORY_MODE_SET_9_60V_OR_9_40A_REF:
 /******************************************************************************/
 
   flashing_FSM = 0;//闪烁状态机
-  if(factory_mode_setV_or_setI){//电流
+
+  if(factory_mode_setV_or_setI)
+  {//电流
     showing_data[4] = Dpy_wei_4 & Dpy_duan_a;
-  }else{//电压
+  }
+  else
+  {//电压
     showing_data[4] = Dpy_wei_4 & Dpy_duan_v;
   }
-  showing_data[5] = 0x0000;
-  showing_data[6] = Dpy_wei_6 & (~_Dpy_duan_D);
   
-  flashing_style[0] = 0;//灭<->亮闪烁模式
+  showing_data[5] = 0x0000;
+  showing_data[6] = Dpy_wei_6 & (~_Dpy_duan_D);//显示短下划线
+  
+  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
   
   while(1){
     main_u16x = seting_data[3+factory_mode_setV_or_setI];//传参给下面这个函数
@@ -970,7 +981,7 @@ FACTORY_MODE_SET_9_60V_OR_9_40A_REF:
       goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF2;
 
     case 0xFF://编码器反转
-      goto FACTORY_MODE2;
+      goto FACTORY_MODE_PREV_MENU;
 
     default:
       FSM_Reverse();
@@ -983,7 +994,7 @@ FACTORY_MODE_SET_9_60V_OR_9_40A_REF_SETING:
 
   flashing_FSM = 1;//闪烁状态机
   
-  flashing_style[0] = 1;//半亮<->全亮闪烁模式
+  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
   
   bmq_turn_mgr_seting_data = seting_data[3+factory_mode_setV_or_setI];
   bmq_turn_mgr_speed_coefficient = 12;
@@ -1013,7 +1024,7 @@ FACTORY_MODE_SET_9_60V_OR_9_40A_REF2:
   showing_data[1] = Dpy_wei_1 & (~_Dpy_duan_D);
   showing_data[2] = 0x0000;
   
-  flashing_style[0] = 0;//灭<->亮闪烁模式
+  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
   
   fp_display_PWM_value = NULL;
   
@@ -1038,7 +1049,7 @@ FACTORY_MODE_SET_9_60V_OR_9_40A_REF2:
       goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF2;
     case 0x01://编码器正转
       
-      goto FACTORY_MODE2;
+      goto FACTORY_MODE_PREV_MENU;
     case 0xFF://编码器反转
       
       goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF;
@@ -1052,24 +1063,28 @@ FACTORY_MODE_SET_9_60V_OR_9_40A_REF2:
 FACTORY_MODE_SAVE_OR_CANSEL:
 /******************************************************************************/
 
-  flashing_FSM = 0;//闪烁状态机
+  flashing_FSM = 0;
   
-  flashing_style[0] = 0;//灭<->亮闪烁模式
+  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
   
-  while(1){
-    if(flashing_FSM){
-      HC595_data_mask[0] = 
-      HC595_data_mask[1] = 0xFFFF;
+  while(1)
+  {
+    //改变显示特征
+    if(flashing_FSM) //编码器空闲期间会在0和1之间来回翻
+	{
+      HC595_data_mask[0] = 0xFFFF;//所有数码管工作
+      HC595_data_mask[1] = 0xFFFF;//所有数码管工作
     }else{
-      HC595_data_mask[0] = 
-      HC595_data_mask[1] = Dpy_wei_0;
+      HC595_data_mask[0] = Dpy_wei_0;//只有最左边数码管工作
+      HC595_data_mask[1] = Dpy_wei_0;//只有最左边数码管工作
     }
     
-    bmq_wait_event();
+    bmq_wait_event();//最多阻塞250ms
+    
     switch(btn_event){
     case 0x02://短按
       
-      if(factory_mode_setV_or_setI==5){//存储参数
+      if(factory_mode_setV_or_setI == 5){//存储参数
         
         main_u8x = 10;
         eeprom_write_unlock_addrx8();
@@ -1102,15 +1117,13 @@ FACTORY_MODE_SAVE_OR_CANSEL:
         
         eeprom_write_lock();
       }
-      
       goto START_UP;
-    case 0x01://编码器正转
-    case 0xFF://编码器反转
-      goto FACTORY_MODE2;
+    case 0x01://编码器正转，放弃保存，cancelled
+    case 0xFF://编码器反转，放弃保存，cancelled
+      goto FACTORY_MODE_PREV_MENU;
     default:
       FSM_Reverse();
     }
-    
   }
   
 }
