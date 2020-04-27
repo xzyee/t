@@ -2,14 +2,15 @@
 #include "general.h"
 #include "driver.h"
 #include "main.h"
+#include "parameter.h"
 
 static u8 btn_status = 1;
-static u8 btn_down_time = 0;
+u8 btn_down_time = 0;
 
 u16 _setV = 0;//TIM4线程专用
 u16 _setI = 0;//TIM4线程专用
 
-static u16 output_I_limit = 500;
+static u16 output_I_limit; 
 static u16 _adc_buf[4];
 
 static u16 adc_buf = 0;
@@ -59,7 +60,7 @@ void setI_update()
 }
 
 #pragma vector = TIM4_OVR_UIF_vector
-__interrupt v TIM4_Init()
+__interrupt void TIM4_Init()
 {
    //数码管管理
   {
@@ -87,44 +88,60 @@ __interrupt v TIM4_Init()
   
   //按键去抖动
   {
-    if(PA3I){//没按
-      if(btn_status){
-        if(btn_status < 10) btn_status = 1;
-        btn_status--;
-      }
-    }else{//正在按
-      if(btn_status != 0xFF){
-        if(btn_status >= 10) btn_status = 0xFE;
-        btn_status++;
-      }
-    }
+	if(PA3I)
+	{//没按
+		if(btn_status)
+		{
+			if(btn_status < TIME_DITHER) btn_status = 1;
+			btn_status--;
+		}
+	}
+	else
+	{//正在按
+		if(btn_status != 0xFF)
+		{
+			if(btn_status >= TIME_DITHER) btn_status = 0xFE;
+			btn_status++;
+		}
+	}
   }
   
   //通用定时器
   {
-    if(--tim4_timer1 == 0){
-      //每25mS进入一次
-      if(user_timer1) user_timer1--;
-      if(tim4_timer2) tim4_timer2--;
-      if(tim4_timer3) tim4_timer3--;
-      tim4_timer1 = 250;
-      
-      {//按键判断
-        if(btn_status >= 10){//正在按
-          if(btn_down_time != 0xFF)btn_down_time++;
-          if(btn_down_time == 20){//发现是长按
-            btn_event = 0x03;
-          }
-        }else{//没按
-          if(btn_down_time){
-            if(btn_down_time < 20){//是短按
-              btn_event = 0x02;
-            }
-            btn_down_time = 0;
-          }
-        }
-      }
-    }
+	if(--tim4_timer1 == 0)
+	{
+		//每25mS进入一次
+		if(user_timer1) user_timer1--;
+		if(tim4_timer2) tim4_timer2--;
+		if(tim4_timer3) tim4_timer3--;
+		tim4_timer1 = 250;
+
+		{//按键判断
+			if(btn_status >= TIME_DITHER)
+			{//正在按
+				if(btn_down_time != 0xFF) btn_down_time++;
+				if(btn_down_time == TIME_BUTTONDOWN_LONG)
+				{//发现是长按
+					btn_event = TURN_BUTTONDOWN_LONG;
+				}
+				if(btn_down_time == TIME_BUTTONDOWN_LONGLONG)
+				{//发现是长长按
+					btn_event = TURN_BUTTONDOWN_LONGLONG;
+				}
+			}
+			else
+			{//没按
+				if(btn_down_time)
+				{
+					if(btn_down_time < TIME_BUTTONDOWN_LONG)
+					{//是短按
+						btn_event = TURN_BUTTONDOWN_SHORT;
+					}
+					btn_down_time = 0;
+				}
+			}
+		}
+	}
   }
   
   //ADC
@@ -187,57 +204,14 @@ __interrupt v TIM4_Init()
           {
             if(tim4_timer3 == 0)
             {
-              output_I_limit = 500;//限流50A
+              output_I_limit = set_I_limit;//限流50A
               tim4_timer2 = 200;
             }
           }
         }
     else
     { //整流测温二极管正常
-          //精度为5度左右
-          //8400 = 75度
-          //9718 = 70度
-          //11244 = 65度
-          //13004 = 60度
-          //15019 = 55度
-          //17309 = 50度
-          
-          if(adc_buf < 17309){//大于50度加强风扇
-            is_fan_need_to_speed_up |= 1;
-          }else{//小于50度
-            if(tim4_timer2 == 0){
-              output_I_limit = 500;//限流50A
-              tim4_timer2 = 200;
-            }
-          }
-          if(tim4_timer2==0){
-            if(adc_buf<8400){//大于75度
-              if(output_I_limit != 0){
-                output_I_limit = 0;//禁止输出
-                tim4_timer2 = 200;
-              }
-            }else if(adc_buf < 9718){//大于70度
-              if(output_I_limit!=100){
-                output_I_limit = 100;//限流10A
-                tim4_timer2 = 200;
-              }
-            }else if(adc_buf < 11244){//大于65度
-              if(output_I_limit != 200){
-                output_I_limit = 200;//限流20A
-                tim4_timer2 = 200;
-              }
-            }else if(adc_buf < 13004){//大于60度
-              if(output_I_limit != 300){
-                output_I_limit = 300;//限流30A
-                tim4_timer2 = 200;
-              }
-            }else if(adc_buf < 15019){//大于55度
-              if(output_I_limit != 400){
-                output_I_limit = 400;//限流40A
-                tim4_timer2 = 200;
-              }
-            }
-          }//end if tim4_timer2==0
+
         }//end else
         
         if(is_fan_need_to_speed_up)
@@ -275,11 +249,11 @@ __interrupt v TIM4_Init()
       
       _setV = setV;
       
-      if(output_I_limit < setI)
+      if(output_I_limit < setI) //由于温度原因限流了
       {
         if(_setI != output_I_limit)
-      {
-          _setI = output_I_limit;
+        {
+          _setI = output_I_limit; //降低电流
           output_PWM_update = 1;
         }
       }
@@ -287,7 +261,7 @@ __interrupt v TIM4_Init()
       {
         if(_setI != setI)
         {
-          _setI = setI;
+          _setI = setI; //正常传递
           output_PWM_update = 1;
         }
       }

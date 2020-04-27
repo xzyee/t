@@ -3,7 +3,14 @@
 #include "it.h"
 #include "driver.h"
 #include "display.h"
+#include "parameter.h"
+#include "main_fun.h"
+#include "factory_fun.h"
+#include "led.h"
 
+#include "main.h"
+
+u8 next_state;
 
 u16 setV = 0;//main线程专用，最终由TIM4实行
 u16 setI = 0;//main线程专用，最终由TIM4实行
@@ -17,6 +24,9 @@ u16 nowV = 0;//比例：537 = 53.7V
 u16 nowI_16bit_ADC_result = 0;
 u16 nowI = 0;//比例：125 = 12.5A
 
+u16 set_V_limit = 1000; //电压设置限制
+u16 set_I_limit = 500;  //电流设置限制
+
 s16 seting_data[11];
 
 u8 factory_mode_setV_or_setI;//工厂模式专用变量，0 = 设置电压（对应菜单项1和2），5 = 设置电流（对应菜单项3和4）。FLASH空间不足了，逼我做成代码复用....
@@ -26,11 +36,10 @@ u8 flashing_style[2] = {FULLBRIGHT,FULLBRIGHT}; //0=灭<->亮循环，1=半亮<-
 u8 main_u8x;//此变量为临时多用变量，只能在main线程内使用，不允许跨函数使用
 u16 main_u16x;//此变量为临时多用变量，只能在main线程内使用，不允许跨函数使用
 
-u8 pos;
+u8 pos = 0;
 
 static void Init();
 
-#include "led.c"
 
 #pragma optimize = low
 /**
@@ -40,1093 +49,363 @@ static void Init();
   */
 void main()
 {
-  CLK_CKDIVR_HSIDIV = 0;//主时钟不分频
+	CLK_CKDIVR_HSIDIV = 0;//主时钟不分频
 
-  Init();
+	Init();
 
-  asm("rim");//开全局中断
-  
-/**
-  ******************************************************************************
-  * goto FACTORY_MODE;
-  ******************************************************************************  
-  */  
-  
-  {//一秒钟内全亮数码管
-    showing_data[0] = Dpy_wei_0 & Dpy_duan_all;
-    showing_data[1] = Dpy_wei_1 & Dpy_duan_all;
-    showing_data[2] = Dpy_wei_2 & Dpy_duan_all;
-    showing_data[3] = Dpy_wei_3 & Dpy_duan_all;
-    showing_data[4] = Dpy_wei_4 & Dpy_duan_all;
-    showing_data[5] = Dpy_wei_5 & Dpy_duan_all;
-    showing_data[6] = Dpy_wei_6 & Dpy_duan_all;
-    user_timer1 = 40;
-    do{}while(user_timer1);
-  }
-  
-/**
-  ******************************************************************************
-  * 按住编码器再开机的，跳到工厂模式
-  ******************************************************************************  
-  */  
-  if(PA3I == 0){
-    pos = 0;
-    showing_data[0] = 0x0000;
-    showing_data[1] = Dpy_wei_1 & Dpy_duan_null;
-    showing_data[2] = Dpy_wei_2 & Dpy_duan_null;
-    showing_data[3] = Dpy_wei_3 & Dpy_duan_null;
-    showing_data[4] = Dpy_wei_4 & Dpy_duan_null;
-    showing_data[5] = Dpy_wei_5 & Dpy_duan_null;
-    showing_data[6] = Dpy_wei_6 & Dpy_duan_null;
-    while(1){
-      pos = show_str(str_0,pos);//刷新显示
-      
-      user_timer1 = 10;
-      do{
-        if(btn_event == 0) continue; //用户无动作
-        switch(btn_event){
-        case 0x02://短按
-          goto FACTORY_MODE;
-        case 0x03://长按
-          if(PA3I){
-            btn_event = 0;
-            goto FACTORY_MODE;
-          }
-          break;
-        default:
-          btn_event = 0;
-        }
-      }while(user_timer1);
-    }
-  }
+	asm("rim");//开全局中断
 
-/******************************************************************************/
-START_UP:
-/******************************************************************************/
-  {//读取EEPROM工厂模式的参数
-    main_u8x = 15;
-    eeprom_read_addrx8();
-    PWM_V_bias = eeprom_buf1;
-    PWM_V_coefficient = eeprom_buf2;
-    
-    main_u8x = 16;
-    eeprom_read_addrx8();
-    PWM_I_bias = eeprom_buf1;
-    PWM_I_coefficient = eeprom_buf2;
-    
-    main_u8x = 17;
-    eeprom_read_addrx8();
-    ADC_V_bias = eeprom_buf1;
-    ADC_V_coefficient = eeprom_buf2;
-    
-    main_u8x = 18;
-    eeprom_read_addrx8();
-    ADC_I_bias = eeprom_buf1;
-    ADC_I_coefficient = eeprom_buf2;
-  }
-  
-  {//读取EEPROM默认电压电流
-    main_u8x = 0;
-    eeprom_read_addrx8();
-    setV = eeprom_buf1;
-    setI = eeprom_buf2;
-    output_PWM_update = 1;
-  }
-  
-  //flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
-  flashing_FSM = 1;
-  UI_time_out = 0;
-  showing_data[0] = 0x0000;
-  
-  main_u8x = FULLBRIGHT;//传参给下面这个函数
-  main_u16x = setV;//传参给下面这个函数
-  display_left_3_digital();
-  
-  main_u16x = setI;//传参给下面这个函数
-  display_right_3_digital();
-  
-  while(1){//开机延迟5秒再输出电压
-    if(flashing_FSM){//亮
-      HC595_data_mask[0] = 0xFFFF;
-      HC595_data_mask[1] = 0xFFFF;
-    }else{//灭
-      HC595_data_mask[0] = 0x0000;
-      HC595_data_mask[1] = 0x0000;
-    }
-    
-    bmq_wait_event();
-    if(btn_event){
-      if(btn_event== 0x02){//按钮短按
-        
-      }
-      goto MAIN_UI;
-    }
-        
-    FSM_Reverse();
-    
-    if(UI_timeout_timer()){
-      //5秒无动作，启动输出，跳到主菜单
-      is_output_ON = 1;
-      output_PWM_update = 1;
-      goto MAIN_UI;
-    }
-  }
-  
-/******************************************************************************/  
-MAIN_UI:
-/******************************************************************************/
-  
-  flashing_FSM = 0;//闪烁状态机
-  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
-  UI_time_out = 0;
-  pos = 0;
-  while(1){//默认主界面
-    showing_data[0] = 0x0000;
-    
-    main_u8x = FULLBRIGHT;//传参给下面这个函数
-    main_u16x = nowV;//传参给下面这个函数
-    display_left_3_digital();
-    
-    if(is_output_ON){
-      flashing_FSM = 1;
-      
-      if(_setI!=setI){//限流保护状态，电流闪烁指示
-        pos++;
-        if(!(pos&0x05)){
-          flashing_FSM = 0;
-        }
-      }
-      
-      main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
-      main_u16x = nowI;//传参给下面这个函数
-      display_right_3_digital();
-      
-    }else{
-      showing_data[4] = Dpy_wei_4&Dpy_duan_o;
-      showing_data[5] = Dpy_wei_5&Dpy_duan_f;
-      showing_data[6] = Dpy_wei_6&Dpy_duan_f;
-    }
-    //HC595_data_mask[0] = 0xFFFF;
-    //HC595_data_mask[1] = 0xFFFF;
-    
-    btn_event = 0;
-    user_timer1 = 6;
-    do{
-      chkbmq();
-      if(btn_event== 0)continue;
-      switch(btn_event){
-      case 0x01://编码器正转
-        
-        goto SET_I;
-      case 0x02://按钮短按 = 开启输出/关闭输出
-        
-        is_output_ON=!is_output_ON;//打开输出/关闭输出
-        output_PWM_update = 1;
-        goto MAIN_UI;
-      case 0xFF://编码器反转
-        
-        goto set_V;
-      case 0x03://按钮长按
-        
-        goto SETING_STORAGE_WRITE;
-      //default:
-        
-      }
-    }while(user_timer1);
-  }
-  
-/******************************************************************************/
-CONTINUOUS_ADJUSTMENT_MODE_V:
-/******************************************************************************/
+	//熄灭全部数码管
+	clear_showing_data();
 
-  showing_data[0] = 0x0000;
-  is_output_ON = 1;
-  UI_time_out = 0;
-  pos = 0;
-  
-  flashing_FSM = 1;//闪烁状态机
-  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
-  
-  bmq_turn_mgr_seting_data = setV;
-  bmq_turn_mgr_speed_coefficient = 12;
-  bmq_turn_mgr_number_upper_limit = 600;
-  bmq_turn_mgr_number_lower_limit = 0;
-  
-  while(1){
-    setV = bmq_turn_mgr_seting_data;
-    output_PWM_update = 1;
-    
-    main_u8x = FULLBRIGHT;
-    main_u16x = nowI;//传参给下面这个函数
-    display_right_3_digital();
-    
-    fp_bmq_turn_mgr_display = display_left_3_digital;
-    if(++UI_time_out>=8){
-      UI_time_out = 8;
-      fp_bmq_turn_mgr_display = NULL;
-      
-      main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
-      main_u16x = nowV;//传参给下面这个函数
-      display_left_3_digital();
-    }
-    bmq_turn_mgr();
-    switch(btn_event){
-    case 0x02://短按
-      
-      main_u8x = 0;
-      eeprom_write_unlock_addrx8();
-      eeprom_buf1 = setV;
-      eeprom_write();
-      eeprom_write_lock();
-      
-      goto MAIN_UI;
-    }
-  }
-
-/******************************************************************************/  
-CONTINUOUS_ADJUSTMENT_MODE_I:
-/******************************************************************************/
-
-  showing_data[0] = 0x0000;
-  is_output_ON = 1;
-  UI_time_out = 0;
-  pos = 0;
-  
-  flashing_FSM = 1;//闪烁状态机
-  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
-  
-  bmq_turn_mgr_seting_data = setI;
-  bmq_turn_mgr_speed_coefficient = 12;
-  bmq_turn_mgr_number_upper_limit = 500;
-  bmq_turn_mgr_number_lower_limit = 0;
-  
-  while(1){
-    setI = bmq_turn_mgr_seting_data;
-    output_PWM_update = 1;
-    
-    main_u8x = FULLBRIGHT;
-    main_u16x = nowV;//传参给下面这个函数
-    display_left_3_digital();
-    
-    fp_bmq_turn_mgr_display = display_right_3_digital;
-    if(++UI_time_out>=8){
-      UI_time_out = 8;
-      fp_bmq_turn_mgr_display = NULL;
-      
-      main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
-      main_u16x = nowI;//传参给下面这个函数
-      display_right_3_digital();
-    }
-    bmq_turn_mgr();
-    switch(btn_event){
-    case 0x02://短按
-      
-      main_u8x = 0;
-      eeprom_write_unlock_addrx8();
-      eep_addr  +=  4;
-      eeprom_buf1 = setI;
-      eeprom_write();
-      eeprom_write_lock();
-      
-      goto MAIN_UI;
-    }
-  }
-  
-/******************************************************************************/  
-SET_STORAGE://选中存取位
-/******************************************************************************/
-
-  main_u8x = FULLBRIGHT;//传参给下面这个函数
-  main_u16x = setV;//传参给下面这个函数
-  display_left_3_digital();
-  main_u16x = setI;//传参给下面这个函数
-  display_right_3_digital();
-  
-  //showV(setV,0);
-  //showI(setI,0);
-  flashing_FSM = 0;//闪烁状态机
-  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
-  UI_time_out = 0;
-  while(1)
-  {
-    main_u16x = 10;
-    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
-    display_left_1_digital();
-    
-    bmq_wait_event();
-    switch(btn_event){
-
-    case 0x01://编码器正转
-      goto set_V;
-
-    case 0xFF://编码器反转
-      goto SET_I;
-
-    case 0x02://短按
-      goto SETING_STORAGE_READ;
-    
-    }
-  
-    FSM_Reverse();
-    
-    if(UI_timeout_timer())
-  {
-      goto MAIN_UI;//5秒无动作
-    }
-  }
-
-/******************************************************************************/  
-SETING_STORAGE_READ:
-/******************************************************************************/
-
-  showing_data[0] = 
-  showing_data[1] = 
-  showing_data[2] = 
-  showing_data[5] = 
-  showing_data[6] = 0x0000;
- // t1 = 0;
-  pos = 0;
-  while(1){//读取提示动画
-    switch(pos){//动画处理
-    case 0:
-      showing_data[3] = Dpy_wei_3&(~_Dpy_duan_C);
-      showing_data[4] = Dpy_wei_4&(~_Dpy_duan_E);
-      pos = 1;
-      break;
-    case 1:
-      showing_data[3] = Dpy_wei_3&(~_Dpy_duan_B);
-      showing_data[4] = Dpy_wei_4&(~_Dpy_duan_F);
-      pos = 2;
-      break;
-    case 2:
-      showing_data[3] = Dpy_wei_3&(~_Dpy_duan_A);
-      showing_data[4] = Dpy_wei_4&(~_Dpy_duan_A);
-      pos = 3;
-      break;
-    case 3:
-      showing_data[3] = 0x0000;
-      showing_data[4] = 0x0000;
-      showing_data[3] = Dpy_wei_2&(~_Dpy_duan_A);
-      showing_data[4] = Dpy_wei_5&(~_Dpy_duan_A);
-      pos = 4;
-      break;
-    case 4:
-      showing_data[2] = 0x0000;
-      showing_data[5] = 0x0000;
-      showing_data[3] = Dpy_wei_1&(~_Dpy_duan_A);
-      showing_data[4] = Dpy_wei_6&(~_Dpy_duan_A);
-      pos = 5;
-      break;
-    default:
-      showing_data[1] = 0x0000;
-      showing_data[6] = 0x0000;
-      goto SETING_STORAGE_READ2;
-    }
-    btn_event = 0;
-    user_timer1 = 5;
-    do{
-      chkbmq();
-      if(btn_event== 0)continue;
-      switch(btn_event){
-      case 0x01://编码器正转
-      case 0xFF://编码器反转
-        goto SETING_STORAGE_READ2;
-      }
-      
-    }while(user_timer1);
-  }
-  
-/******************************************************************************/ 
-SETING_STORAGE_READ2:
-/******************************************************************************/
-
-  flashing_FSM = 0;
-  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
-  UI_time_out = 0;
-  
-  bmq_turn_mgr_seting_data = 1;
-  bmq_turn_mgr_speed_coefficient = 255;
-  bmq_turn_mgr_number_upper_limit = 9;
-  bmq_turn_mgr_number_lower_limit = 1;
-  fp_bmq_turn_mgr_display = display_left_1_digital;
-  
-  while(1){
-    main_u8x=(u8)bmq_turn_mgr_seting_data;//传参给下面这个函数
-    eeprom_read_addrx8();
-    
-    main_u8x = FULLBRIGHT;//传参给下面这个函数
-    main_u16x = eeprom_buf1;//传参给下面这个函数
-    display_left_3_digital();
-    main_u16x = eeprom_buf2;//传参给下面这个函数
-    display_right_3_digital();
-    
-    bmq_turn_mgr();
-    
-    switch(btn_event){
-    case 0x02://短按
-      
-      setV = eeprom_buf1;
-      setI = eeprom_buf2;
-      output_PWM_update = 1;
-      
-      main_u8x = 0;
-      eeprom_write_unlock_addrx8();
-      eeprom_write();
-      eeprom_buf1 = eeprom_buf2;
-      eeprom_write();
-      eeprom_write_lock();
-      goto MAIN_UI;
-    }
-    
-      
-    if(UI_timeout_timer()){
-      //5秒无动作
-      goto MAIN_UI;
-    }
-  }
-  
-/******************************************************************************/  
-set_V://选中电压
-/******************************************************************************/
-
-  showing_data[0] = Dpy_wei_0&Dpy_duan_negative;//横杠
-  
-  main_u16x = setI;//传参给下面这个函数
-  main_u8x = FULLBRIGHT;//传参给下面这个函数
-  display_right_3_digital();
-  
-  flashing_FSM = 0;//闪烁状态机
-  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
-  UI_time_out = 0;
-  while(1){
-    main_u16x = setV;//传参给下面这个函数
-    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
-    display_left_3_digital();
-    
-    bmq_wait_event();
-    switch(btn_event){
-    case 0x01://编码器正转
-      
-      goto SET_I;
-    case 0xFF://编码器反转
-      
-      goto SET_STORAGE;
-    case 0x02://短按
-      
-      goto SETING_V;
-    case 0x03://长按
-      
-      goto CONTINUOUS_ADJUSTMENT_MODE_V;
-    }
-    
-    FSM_Reverse();
-    
-    if(UI_timeout_timer()){
-      //5秒无动作
-      goto MAIN_UI;
-    }
-  }
-
-/******************************************************************************/    
-SETING_V://调节电压
-/******************************************************************************/
-
-  flashing_FSM = 1;//闪烁状态机
-  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
-  UI_time_out = 0;
-  
-  bmq_turn_mgr_seting_data = setV;
-  bmq_turn_mgr_speed_coefficient = 12;
-  bmq_turn_mgr_number_upper_limit = 600;
-  bmq_turn_mgr_number_lower_limit = 0;
-  fp_bmq_turn_mgr_display = display_left_3_digital;
-  
-  while(1){
-    bmq_turn_mgr();
-    switch(btn_event){
-    case 0x02://短按
-      
-      setV = bmq_turn_mgr_seting_data;
-      output_PWM_update = 1;
-      
-      main_u8x = 0;
-      eeprom_write_unlock_addrx8();
-      eeprom_buf1 = setV;
-      eeprom_write();
-      eeprom_write_lock();
-      
-      goto MAIN_UI;
-    }
-    
-    
-    if(UI_timeout_timer()){
-      //5秒无动作
-      goto MAIN_UI;
-    }
-  }
-
-/******************************************************************************/  
-SET_I://选中电流
-/******************************************************************************/
-
-  showing_data[0] = Dpy_wei_0&Dpy_duan_negative;//横杠
-  
-  main_u16x = setV;//传参给下面这个函数
-  main_u8x = FULLBRIGHT;//传参给下面这个函数
-  display_left_3_digital();
-  
-  //showV(setV,0);
-  flashing_FSM = 0;//闪烁状态机
-  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
-  UI_time_out = 0;
-  while(1){
-    main_u16x = setI;//传参给下面这个函数
-    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
-    display_right_3_digital();
-    
-    bmq_wait_event();
-    
-    switch(btn_event){
-    case 0x01://编码器正转
-      
-      goto SET_STORAGE;
-    case 0xFF://编码器反转
-      
-      goto set_V;
-    case 0x02://短按
-      
-      goto SETING_I;
-    case 0x03://长按
-      
-      goto CONTINUOUS_ADJUSTMENT_MODE_I;
-    }
-    
-    FSM_Reverse();
-      
-    if(UI_timeout_timer()){
-      //5秒无动作
-      goto MAIN_UI;
-    }
-  }
-
-/******************************************************************************/  
-SETING_I://调节电流
-/******************************************************************************/
-
-  flashing_FSM = 1;//闪烁状态机
-  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
-  UI_time_out = 0;
-  
-  bmq_turn_mgr_seting_data = setI;
-  bmq_turn_mgr_speed_coefficient = 12;
-  bmq_turn_mgr_number_upper_limit = 500;
-  bmq_turn_mgr_number_lower_limit = 0;
-  fp_bmq_turn_mgr_display = display_right_3_digital;
-  while(1){
-    bmq_turn_mgr();
-    switch(btn_event){
-    case 0x02://短按
-      
-      setI = bmq_turn_mgr_seting_data;
-      output_PWM_update = 1;
-      
-      main_u8x = 0;
-      eeprom_write_unlock_addrx8();
-      eep_addr  +=  4;
-      eeprom_buf1 = setI;
-      eeprom_write();
-      eeprom_write_lock();
-      
-      goto MAIN_UI;
-    }
-    
-    
-    if(UI_timeout_timer()){
-      //5秒无动作
-      goto MAIN_UI;
-    }
-  }
-  
-/******************************************************************************/  
-SETING_STORAGE_WRITE:
-/******************************************************************************/
-
-  showing_data[0] = 
-  showing_data[2] = 
-  showing_data[3] = 
-  showing_data[4] = 
-  showing_data[5] = 0x0000;
-  //t1 = 0;
-  pos = 0;
-  while(1){//存储提示动画
-    switch(pos){//动画处理
-    case 0:
-      showing_data[1] = Dpy_wei_1&(~_Dpy_duan_A);
-      showing_data[6] = Dpy_wei_6&(~_Dpy_duan_A);
-      pos = 1;
-      break;
-    case 1:
-      showing_data[1] = 0x0000;
-      showing_data[6] = 0x0000;
-      showing_data[2] = Dpy_wei_2&(~_Dpy_duan_A);
-      showing_data[5] = Dpy_wei_5&(~_Dpy_duan_A);
-      
-      pos = 2;
-      break;
-    case 2:
-      showing_data[2] = 0x0000;
-      showing_data[5] = 0x0000;
-      showing_data[3] = Dpy_wei_3&(~_Dpy_duan_A);
-      showing_data[4] = Dpy_wei_4&(~_Dpy_duan_A);
-      pos = 3;
-      break;
-    case 3:
-      showing_data[3] = Dpy_wei_3&(~_Dpy_duan_B);
-      showing_data[4] = Dpy_wei_4&(~_Dpy_duan_F);
-      pos = 4;
-      break;
-    case 4:
-      showing_data[3] = Dpy_wei_3&(~_Dpy_duan_C);
-      showing_data[4] = Dpy_wei_4&(~_Dpy_duan_E);
-      pos = 5;
-      break;
-    default:
-      showing_data[3] = 0x0000;
-      showing_data[4] = 0x0000;
-      goto SETING_STORAGE_WRITE2;
-    }
-    btn_event = 0;
-    user_timer1 = 5;
-    do{
-      chkbmq();
-      if(btn_event== 0) continue;
-      switch(btn_event){
-      case 0x01://编码器正转
-      case 0xFF://编码器反转
-      goto SETING_STORAGE_WRITE2;
-      }
-    }while(user_timer1);
-  }
-
-/******************************************************************************/  
-SETING_STORAGE_WRITE2:
-/******************************************************************************/
-  flashing_FSM = 0;
-  flashing_style[0] = STRONGBLINK;//半亮<->全亮闪烁模式
-  UI_time_out = 0;
-  
-  main_u8x = FULLBRIGHT;
-  main_u16x = setV;
-  display_left_3_digital();
-  main_u16x = setI;
-  display_right_3_digital();
-  
-  bmq_turn_mgr_seting_data = 1;
-  bmq_turn_mgr_speed_coefficient = 255;
-  bmq_turn_mgr_number_upper_limit = 9;
-  bmq_turn_mgr_number_lower_limit = 1;
-  fp_bmq_turn_mgr_display = display_left_1_digital;
-  
-  while(1){
-    bmq_turn_mgr();
-    switch(btn_event){
-    case 0x02://短按
-      
-      main_u8x=(u8)bmq_turn_mgr_seting_data;
-      eeprom_write_unlock_addrx8();
-      eeprom_buf1 = setV;
-      eeprom_write();
-      eeprom_buf1 = setI;
-      eeprom_write();
-      eeprom_write_lock();
-      
-      goto MAIN_UI;
-    }
-    
-    if(UI_timeout_timer()){
-      //5秒无动作
-      goto MAIN_UI;
-    }
-  }
-  
-/******************************************************************************/  
-FACTORY_MODE://工厂模式
-/******************************************************************************/
-
-  seting_data[0] = 1;//最左边的数码管的数字
-  
-  main_u8x = 10;
-  eeprom_read_addrx8();
-  seting_data[1] = eeprom_buf1;
-  seting_data[2] = eeprom_buf2;
-  
-  main_u8x = 11;
-  eeprom_read_addrx8();
-  seting_data[3] = eeprom_buf1;
-  seting_data[4] = eeprom_buf2;
-  
-  main_u8x = 12;
-  eeprom_read_addrx8();
-  seting_data[5] = eeprom_buf1;
-  seting_data[6] = eeprom_buf2;
-  
-  main_u8x = 13;
-  eeprom_read_addrx8();
-  seting_data[7] = eeprom_buf1;
-  seting_data[8] = eeprom_buf2;
-  
-  main_u8x = 14;
-  eeprom_read_addrx8();
-  seting_data[9] = eeprom_buf1;
-  seting_data[10] = eeprom_buf2;
-
-  // trim something
-  if(seting_data[3]<100 || seting_data[3]>600){
-    seting_data[3] = 600;
-  }
-  if(seting_data[8]<100 || seting_data[8]>400){
-    seting_data[8] = 100;
-  }
-  
-  /*
-  seting_data[1] = 0;//0.5V对应的PWM值
-  seting_data[2] = 0;//0.5V对应的ADC值
-  seting_data[3] = 600;//9-60V之间选中的参考电压（比例：600 = 60V）
-  seting_data[4] = 0;//9-60V之间选中的参考电压对应的PWM值
-  seting_data[5] = 0;//9-60V之间选中的参考电压对应的ADC值
-  seting_data[6] = 0;//0.5A对应的PWM值
-  seting_data[7] = 0;//0.5A对应的ADC值
-  seting_data[8] = 100;//9-40A之间选中的参考电流（比例：400 = 40A）
-  seting_data[9] = 0;//9-40A之间选中的参考电流对应的PWM值
-  seting_data[10] = 0;//9-40A之间选中的参考电流对应的ADC值
-  */
-  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
-  
-/******************************************************************************/  
-FACTORY_MODE_PREV_MENU:
-/******************************************************************************/
-  flashing_FSM = 0;
-  
-/******************************************************************************/  
-FACTORY_MODE_MENU:
-/******************************************************************************/
-
-  showing_data[1] = Dpy_wei_1 & Dpy_duan_null;
-  showing_data[2] = Dpy_wei_2 & Dpy_duan_null;
-  showing_data[3] = Dpy_wei_3 & Dpy_duan_null;
-  showing_data[4] = Dpy_wei_4 & Dpy_duan_null;
-  showing_data[5] = Dpy_wei_5 & Dpy_duan_null;
-  showing_data[6] = Dpy_wei_6 & Dpy_duan_null;
-  
-  pos = 0;
-  while(1){
-    main_u16x = seting_data[0];//菜单数字（1~6），传参给下面这个函数
-    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
-    display_left_1_digital();
-    
-    pos = show_str(str_list[LOW(seting_data[0])-1],pos);//刷新显示
-    
-    bmq_wait_event();
-    switch(btn_event){
-		
-    case 0x01://编码器正转
-      
-      if(flashing_style[0]){//正在调节最左边的数码管
-        pos = 0;
-        ++seting_data[0];
-        if(seting_data[0] > 6) seting_data[0] = 6;
-        flashing_FSM = 1;
-        goto FACTORY_MODE_MENU;
-      }else{
-        switch(LOW(seting_data[0])){
-        case 1:
-          factory_mode_setV_or_setI = 0;
-          goto FACTORY_MODE_SET_0_5V_OR_0_5A_REF;
-        case 2:
-          factory_mode_setV_or_setI = 0;
-          goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF;
-        case 3:
-          factory_mode_setV_or_setI = 5;
-          goto FACTORY_MODE_SET_0_5V_OR_0_5A_REF;
-        case 4:
-          factory_mode_setV_or_setI = 5;
-          goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF;
-        case 5:
-          factory_mode_setV_or_setI = 5;//代表要存储参数
-          goto FACTORY_MODE_SAVE_OR_CANSEL;
-        default:
-          factory_mode_setV_or_setI = 0;//代表要放弃参数
-          goto FACTORY_MODE_SAVE_OR_CANSEL;
-        }
-      }
-      break;
-	  
-    case 0xFF://编码器反转
-      
-      if(flashing_style[0]){//正在调节最左边的数码管
-        pos = 0;
-        --seting_data[0];
-        if(seting_data[0] < 1) seting_data[0] = 1;
-        flashing_FSM = 1;
-        goto FACTORY_MODE_MENU;
-      }else{
-        switch(LOW(seting_data[0])){
-        case 1:
-          factory_mode_setV_or_setI = 0;
-          goto FACTORY_MODE_SET_0_5V_OR_0_5A_REF;
-        case 2:
-          factory_mode_setV_or_setI = 0;
-          goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF2;
-        case 3:
-          factory_mode_setV_or_setI = 5;
-          goto FACTORY_MODE_SET_0_5V_OR_0_5A_REF;
-        case 4:
-          factory_mode_setV_or_setI = 5;
-          goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF2;
-        case 5:
-          factory_mode_setV_or_setI = 5;//代表要存储参数
-          goto FACTORY_MODE_SAVE_OR_CANSEL;
-        default:
-          factory_mode_setV_or_setI = 0;//代表要放弃参数
-          goto FACTORY_MODE_SAVE_OR_CANSEL;
-        }
-      }
-      break;
-	  
-    case 0x02://短按
-            
-      flashing_style[0] = !flashing_style[0];//切换：数值调整状态 <--> 项目选择状态
-      
-      break;
-    default: //0x00,用户没有在规定时间内操作
-      
-      FSM_Reverse();
-    }
-  }
-
-/******************************************************************************/  
-FACTORY_MODE_SET_0_5V_OR_0_5A_REF:
-/******************************************************************************/
-
-  flashing_FSM = 0;//闪烁状态机
-  showing_data[1] = 0x0000;
-  showing_data[2] = 0x0000;
-  
-  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
-  
-  fp_display_PWM_value = NULL;
-  
-  while(1){
-    main_u16x = seting_data[1+factory_mode_setV_or_setI];//传参给下面这个函数
-    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
-    display_PWM_value();
-    
-    bmq_wait_event();
-    switch(btn_event){
-		
-    case 0x02://短按
-      
-      factory_mode_seting_PWM_PWMdata = seting_data[1+factory_mode_setV_or_setI];
-      factory_mode_seting_PWM();
-      if(factory_mode_setV_or_setI){//电流
-        seting_data[1+5] = factory_mode_seting_PWM_PWMdata;
-        seting_data[2+5] = nowI_16bit_ADC_result;
-      }else{//电压
-        seting_data[1] = factory_mode_seting_PWM_PWMdata;
-        seting_data[2] = nowV_16bit_ADC_result;
-      }
-      goto FACTORY_MODE_SET_0_5V_OR_0_5A_REF;
-	  
-    case 0x01://编码器正转
-    case 0xFF://编码器反转
-      
-      goto FACTORY_MODE_PREV_MENU;
+	next_state = WAITING_TO_FACTORY_MODE;
 	
-    default:
-      FSM_Reverse();
-    }
-  }
 
-/******************************************************************************/  
-FACTORY_MODE_SET_9_60V_OR_9_40A_REF:
-/******************************************************************************/
 
-  flashing_FSM = 0;//闪烁状态机
-
-  if(factory_mode_setV_or_setI)
-  {//电流
-    showing_data[4] = Dpy_wei_4 & Dpy_duan_a;
-  }
-  else
-  {//电压
-    showing_data[4] = Dpy_wei_4 & Dpy_duan_v;
-  }
-  
-  showing_data[5] = 0x0000;
-  showing_data[6] = Dpy_wei_6 & (~_Dpy_duan_D);//显示短下划线
-  
-  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
-  
-  while(1){
-    main_u16x = seting_data[3+factory_mode_setV_or_setI];//传参给下面这个函数
-    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
-    display_left_3_digital();
-    
-    bmq_wait_event();
-    switch(btn_event){
-    case 0x02://短按
-      goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF_SETING;
-
-    case 0x01://编码器正转
-      goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF2;
-
-    case 0xFF://编码器反转
-      goto FACTORY_MODE_PREV_MENU;
-
-    default:
-      FSM_Reverse();
-    }
-  }
-
-/******************************************************************************/  
-FACTORY_MODE_SET_9_60V_OR_9_40A_REF_SETING:
-/******************************************************************************/
-
-  flashing_FSM = 1;//闪烁状态机
-  
-  flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
-  
-  bmq_turn_mgr_seting_data = seting_data[3+factory_mode_setV_or_setI];
-  bmq_turn_mgr_speed_coefficient = 12;
-  bmq_turn_mgr_number_upper_limit = 600;
-  if(factory_mode_setV_or_setI){
-    bmq_turn_mgr_number_upper_limit = 400;
-  }
-  bmq_turn_mgr_number_lower_limit = 90;
-  fp_bmq_turn_mgr_display = display_left_3_digital;
-  
-  while(1){
-    bmq_turn_mgr();
-    
-    if(btn_event== 0x02){
-      seting_data[3+factory_mode_setV_or_setI] = bmq_turn_mgr_seting_data;
-      
-      goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF;
-    }
-    
-  }
-  
-/******************************************************************************/  
-FACTORY_MODE_SET_9_60V_OR_9_40A_REF2:
-/******************************************************************************/
-
-  flashing_FSM = 0;//闪烁状态机
-  showing_data[1] = Dpy_wei_1 & (~_Dpy_duan_D);
-  showing_data[2] = 0x0000;
-  
-  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
-  
-  fp_display_PWM_value = NULL;
-  
-  while(1){
-    main_u16x = seting_data[4+factory_mode_setV_or_setI];//传参给下面这个函数
-    main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
-    display_PWM_value();
-    
-    bmq_wait_event();
-    switch(btn_event){
-    case 0x02://短按
-      
-      factory_mode_seting_PWM_PWMdata = seting_data[4+factory_mode_setV_or_setI];
-      factory_mode_seting_PWM();
-      if(factory_mode_setV_or_setI){//电流
-        seting_data[4+5] = factory_mode_seting_PWM_PWMdata;
-        seting_data[5+5] = nowI_16bit_ADC_result;
-      }else{//电压
-        seting_data[4] = factory_mode_seting_PWM_PWMdata;
-        seting_data[5] = nowV_16bit_ADC_result;
-      }
-      goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF2;
-    case 0x01://编码器正转
-      
-      goto FACTORY_MODE_PREV_MENU;
-    case 0xFF://编码器反转
-      
-      goto FACTORY_MODE_SET_9_60V_OR_9_40A_REF;
-    default:
-      FSM_Reverse();
-    }
-    
-  }
-
-/******************************************************************************/  
-FACTORY_MODE_SAVE_OR_CANSEL:
-/******************************************************************************/
-
-  flashing_FSM = 0;
-  
-  flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
-  
-  while(1)
-  {
-    //改变显示特征
-    if(flashing_FSM) //编码器空闲期间会在0和1之间来回翻
+while(1)
+{  
+	//while(1){do_read_animation();}
+	switch(next_state)
 	{
-      HC595_data_mask[0] = 0xFFFF;//所有数码管工作
-      HC595_data_mask[1] = 0xFFFF;//所有数码管工作
-    }else{
-      HC595_data_mask[0] = Dpy_wei_0;//只有最左边数码管工作
-      HC595_data_mask[1] = Dpy_wei_0;//只有最左边数码管工作
-    }
-    
-    bmq_wait_event();//最多阻塞250ms
-    
-    switch(btn_event){
-    case 0x02://短按
-      
-      if(factory_mode_setV_or_setI == 5){//存储参数
-        
-        main_u8x = 10;
-        eeprom_write_unlock_addrx8();
-        
-        pos = 1;
-        do{
-          eeprom_buf1 = seting_data[pos];
-          eeprom_write();
-        }while(++pos <= 10);
-        
-        
-        calculation_factory_parameters();
-        
-        eeprom_buf1 = PWM_V_bias;
-        eeprom_write();
-        eeprom_buf1 = PWM_V_coefficient;
-        eeprom_write();
-        eeprom_buf1 = PWM_I_bias;
-        eeprom_write();
-        eeprom_buf1 = PWM_I_coefficient;
-        eeprom_write();
-        eeprom_buf1 = ADC_V_bias;
-        eeprom_write();
-        eeprom_buf1 = ADC_V_coefficient;
-        eeprom_write();
-        eeprom_buf1 = ADC_I_bias;
-        eeprom_write();
-        eeprom_buf1 = ADC_I_coefficient;
-        eeprom_write();
-        
-        eeprom_write_lock();
-      }
-      goto START_UP;
-    case 0x01://编码器正转，放弃保存，cancelled
-    case 0xFF://编码器反转，放弃保存，cancelled
-      goto FACTORY_MODE_PREV_MENU;
-    default:
-      FSM_Reverse();
-    }
-  }
-  
+		
+		/******************************************************************************/
+		case WAITING_TO_FACTORY_MODE:
+		/******************************************************************************/
+		main_u8x = 0; 
+		btn_event = 0;
+		main_u16x = 12;//WAIT_TIME_FOR_GOING_TO_FACTORY_MENU_COUNTS;
+		next_state = START_UP;
+		
+		while(main_u16x)
+		{
+			bmq_wait_event();
+			if(btn_event == TURN_BUTTONDOWN_SHORT)
+				++main_u8x; 
+			if(main_u8x >= 3)
+			{//按钮连续短按三次
+				btn_event = TURN_NONE;
+				pos = show_str(str_0, pos);
+				next_state = FACTORY_MODE;
+				break;
+			}
+			--main_u16x;
+		}
+		break;
+			
+		/******************************************************************************/
+		case START_UP:
+		/******************************************************************************/
+		{//读取EEPROM工厂模式的参数
+			main_u8x = EEPROM_ADDR_START_CAL_DATA;
+			eeprom_read_addrx8();
+			PWM_V_bias = eeprom_buf1;
+			PWM_V_coefficient = eeprom_buf2;
+
+			main_u8x = EEPROM_ADDR_START_CAL_DATA + 1;
+			eeprom_read_addrx8();
+			PWM_I_bias = eeprom_buf1;
+			PWM_I_coefficient = eeprom_buf2;
+
+			main_u8x = EEPROM_ADDR_START_CAL_DATA + 2;
+			eeprom_read_addrx8();
+			ADC_V_bias = eeprom_buf1;
+			ADC_V_coefficient = eeprom_buf2;
+
+			main_u8x = EEPROM_ADDR_START_CAL_DATA + 3;
+			eeprom_read_addrx8();
+			ADC_I_bias = eeprom_buf1;
+			ADC_I_coefficient = eeprom_buf2;
+		}
+
+		{//读取EEPROM默认电压电流
+			main_u8x = EEPROM_ADDR_START_DEFAULT;
+			eeprom_read_addrx8();
+			setV = eeprom_buf1;
+			setI = eeprom_buf2;
+		}
+
+		{//读取EEPROM限制电压电流
+			main_u8x = EEPROM_ADDR_START_LIMIT;
+			eeprom_read_addrx8();
+			set_V_limit = eeprom_buf1;
+			//if(set_V_limit<500)  set_V_limit = 500;
+			set_I_limit = eeprom_buf2;
+			//if(set_I_limit<400)  set_I_limit = 400;
+		}
+
+			is_output_ON = 0; //开机要求不输出两路基准
+			output_PWM_update = 0; 
+
+			flashing_FSM = 1;
+			UI_time_out = 0;
+			showing_data[0] = DARK;
+
+			main_u8x = FULLBRIGHT;//传参给下面这个函数
+			main_u16x = setV;//传参给下面这个函数
+			display_left_4_digital();
+
+			main_u16x = setI;//传参给下面这个函数
+			display_right_3_digital();
+			next_state = MAIN_UI;
+			break;
+
+		/******************************************************************************/  
+		case MAIN_UI:
+		/******************************************************************************/
+
+			flashing_FSM = 0;//闪烁状态机
+			flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
+			UI_time_out = 0;
+			pos = 0;
+			
+			//默认主界面
+			showing_data[0] = DARK;
+
+			main_u8x = FULLBRIGHT;//传参给下面这个函数
+			main_u16x = is_output_ON ? nowV : setV;//传参给下面这个函数
+			display_left_4_digital();
+
+			if(is_output_ON)
+			{
+			flashing_FSM = 1;
+
+			main_u8x = flashing_style[flashing_FSM];//传参给下面这个函数
+			main_u16x = nowI;//传参给下面这个函数
+			display_right_3_digital();
+
+			}
+			else
+			{
+				showing_data[4] = Dpy_wei_4&Dpy_duan_o;
+				showing_data[5] = Dpy_wei_5&Dpy_duan_f;
+				showing_data[6] = Dpy_wei_6&Dpy_duan_f;
+			}
+
+			btn_event = TURN_NONE;
+			user_timer1 = 6;
+			do
+			{
+				chkbmq();
+				if(btn_event == TURN_NONE) continue;
+				switch(btn_event)
+				{
+					case TURN_LEFT://编码器反转
+						next_state = SET_V; break;
+					case TURN_RIGHT://编码器正转
+						next_state = SET_I; break;
+					case TURN_BUTTONDOWN_SHORT://按钮短按 = 开启输出/关闭输出
+						btn_event = TURN_NONE;
+						
+						user_timer1 = WAIT_TIME_FOR_SHORTSHORT_PUSH_COUNTS; //判断连续按两下
+						while(user_timer1)
+						{				
+							if(btn_event == TURN_BUTTONDOWN_SHORT) //again
+							{
+								next_state = SETING_STORAGE_READ;
+								break;
+							}
+						}
+						if(next_state != SETING_STORAGE_READ)
+						{
+							is_output_ON = is_output_ON ? 0 : 1;//切换：打开输出/关闭输出
+							output_PWM_update = 1;
+							next_state = MAIN_UI; 
+						}
+						break;
+					case TURN_BUTTONDOWN_LONG://按钮长按
+						user_timer1 = WAIT_TIME_FOR_LONG_PUSH_COUNTS;
+						while(user_timer1);
+						if(btn_down_time > WAIT_TIME_FOR_LONG_PUSH_COUNTS) 
+						{
+							next_state = MAIN_UI; btn_event = TURN_NONE; //不理会本次长按
+						}
+						else
+						{
+							next_state = SETING_STORAGE_WRITE; break;
+						}
+                                                break;
+					case TURN_BUTTONDOWN_LONGLONG://按钮长按3秒
+						user_timer1 = 64; /*1.6s*/
+						main_u8x = user_timer1; main_u16x = PWM >> 6;
+						while(1)
+						{
+							if(user_timer1 == main_u8x) continue;//25ms坎未到
+							main_u8x = user_timer1;
+							PWM = ( PWM > main_u16x ) ? PWM - main_u16x : 0; //逐渐减小至0
+							set_V_PWM();
+							if(PWM == 0) is_output_ON = 0; clear_by_null();
+						};//永远循环，只能关机
+						break;
+					default:
+						break;
+				}
+			}while(user_timer1);
+
+		
+			break;
+		/******************************************************************************/  
+		case CONTINUOUS_ADJUSTMENT_MODE_I:
+		/******************************************************************************/
+		do_continuous_adjustment_i();
+		next_state = MAIN_UI; break;
+
+		/******************************************************************************/  
+		case CONTINUOUS_ADJUSTMENT_MODE_V:
+		/******************************************************************************/
+		do_continuous_adjustment_v();
+		next_state = MAIN_UI; break;
+
+		/******************************************************************************/  
+		case SET_STORAGE://选中存取位
+		/******************************************************************************/
+		menu_set_storage(); break;
+		
+		/******************************************************************************/  
+		case SETING_STORAGE_READ:
+		/******************************************************************************/
+		do_read_animation(); 
+		next_state = SETING_STORAGE_READ2; break;
+		
+		/******************************************************************************/ 
+		case SETING_STORAGE_READ2:
+		/******************************************************************************/
+		do_seting_storage_read2();
+		next_state = MAIN_UI; break;
+
+		/******************************************************************************/  
+		case SET_V://选中电压
+		/******************************************************************************/
+		menu_set_V(); break;
+		/******************************************************************************/    
+		case SETING_V://调节电压
+		/******************************************************************************/
+		do_seting_V(); 
+		next_state = MAIN_UI; break;
+		/******************************************************************************/  
+		case SET_I://选中电流
+		/******************************************************************************/
+		menu_set_I(); break;
+		/******************************************************************************/  
+		case SETING_I://调节电流
+		/******************************************************************************/
+		do_seting_I(); 
+		next_state = MAIN_UI; break;
+
+		/******************************************************************************/  
+		case SETING_STORAGE_WRITE:
+		/******************************************************************************/
+		do_write_animation();
+		next_state = SETING_STORAGE_WRITE2; break;
+		/******************************************************************************/  
+		case SETING_STORAGE_WRITE2:
+		/******************************************************************************/
+		do_seting_storage_write2();
+		next_state = MAIN_UI; break;
+
+
+
+		/******************************************************************************/  
+		case FACTORY_MODE://工厂模式
+		/******************************************************************************/
+
+		seting_data[0] = 1;//最左边的数码管的数字
+
+		main_u8x = EEPROM_ADDR_START_CAL_RAW;
+		eeprom_read_addrx8();
+		seting_data[1] = eeprom_buf1;
+		seting_data[2] = eeprom_buf2;
+
+		main_u8x = EEPROM_ADDR_START_CAL_RAW + 1;
+		eeprom_read_addrx8();
+		seting_data[3] = eeprom_buf1; //Vref
+		seting_data[4] = eeprom_buf2;
+
+		main_u8x = EEPROM_ADDR_START_CAL_RAW + 2;
+		eeprom_read_addrx8();
+		seting_data[5] = eeprom_buf1;
+		seting_data[6] = eeprom_buf2;
+
+		main_u8x = EEPROM_ADDR_START_CAL_RAW + 3;
+		eeprom_read_addrx8();
+		seting_data[7] = eeprom_buf1;
+		seting_data[8] = eeprom_buf2;//Iref
+
+		main_u8x = EEPROM_ADDR_START_CAL_RAW + 4;
+		eeprom_read_addrx8();
+		seting_data[9]  = eeprom_buf1;
+		seting_data[10] = eeprom_buf2;
+
+		// trim something ???
+		if(seting_data[3]<100 || seting_data[3]>12000){
+		seting_data[3] = 12000;
+		}
+		if(seting_data[8]<100 || seting_data[8]>900){
+		seting_data[8] = 900;
+		}
+
+		flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
+		next_state = FACTORY_MODE_PREV_MENU;
+		break;
+
+		/******************************************************************************/  
+		case FACTORY_MODE_PREV_MENU:
+		/******************************************************************************/
+		flashing_FSM = 0;
+		next_state = FACTORY_MODE_MENU;
+
+		/******************************************************************************/  
+		case FACTORY_MODE_MENU:
+		/******************************************************************************/
+			show_factory_mode_menu();
+			break;
+
+		case FACTORY_MODE_SET_0_5V_OR_0_5A_REF:
+			do_set_0p5V_or_0p5A_ref();
+			break;
+
+		case STATE_2_STEP0:
+		do_factory_frame_menu_V();//显示方框菜单
+		break;
+		case STATE_2_STEP1: //设置极限电压
+		do_factory_set_V_limit();
+		next_state = STATE_2_STEP0;
+		break;
+		case STATE_2_STEP2: //设置校准电压
+		//do_read_animation(); do_read_animation();
+		do_factory_set_V_ref();
+		next_state = STATE_2_STEP3;
+		break;
+		case STATE_2_STEP3: //校准此校准电压
+		do_factory_cal_V_ref();
+		next_state = FACTORY_MODE_MENU;
+		break;
+		case STATE_4_STEP0: //设置极限电流
+		do_factory_frame_menu_V();//显示方框菜单
+		break;
+		case STATE_4_STEP1: //设置极限电流
+		do_factory_set_I_limit();
+		next_state = STATE_4_STEP0;
+		break;
+		case STATE_4_STEP2: //设置校准电流
+		do_factory_set_I_ref();
+		next_state = STATE_4_STEP3;
+		break;
+		case STATE_4_STEP3: //校准此校准电流
+		do_factory_cal_I_ref();
+		next_state = FACTORY_MODE_MENU;
+		break;
+
+		case FACTORY_MODE_SAVE_OR_CANSEL:
+		do_factory_mode_save();
+		break;
+		
+		}
+	}
 }
+
+
+
+
 
 static void Init()
 {
@@ -1277,5 +556,7 @@ static void Init()
   {
     PBinit(C,5,1,1,0);//风扇控制
     PC5O = 0;
+	PBinit(D,2,1,1,0);//X控制
+	PD2O = 1;//开机要求输出高电平
   }
 }

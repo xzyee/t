@@ -7,7 +7,64 @@ typedef   signed long     s4;
 typedef unsigned char     u8;
 typedef unsigned short    u16;
 typedef unsigned long     u32;
-typedef void              v;
+
+
+enum  {
+	VOLT = 0,
+	CURRENT = 4
+};
+
+enum {
+	DATA_SET_V_LIMIT = 0xF1,
+	DATA_SET_I_LIMIT,
+	
+	DATA_SET_V_REF,
+	DATA_SET_I_REF,
+	
+	DATA_SET_V,
+	DATA_SET_I,
+	
+	DATA_PWM,
+	DATA_MENU
+};
+enum{ 
+  STRONGBLINK,
+  WEAKBLINK,
+  FULLBRIGHT
+};
+
+enum {
+	WAITING_TO_FACTORY_MODE,
+	START_UP,
+	MAIN_UI,
+	CONTINUOUS_ADJUSTMENT_MODE_I,
+	CONTINUOUS_ADJUSTMENT_MODE_V,
+	SET_STORAGE,//选中存取位
+	SETING_STORAGE_READ,
+	SETING_STORAGE_READ2,
+	SET_V,//选中电压
+	SETING_V,//调节电压
+	SET_I,//选中电流
+	SETING_I,//调节电流
+	SETING_STORAGE_WRITE,
+	SETING_STORAGE_WRITE2,
+	FACTORY_MODE,//工厂模式
+	FACTORY_MODE_PREV_MENU,
+	FACTORY_MODE_MENU,
+	FACTORY_MODE_SET_0_5V_OR_0_5A_REF,
+	STATE_2_STEP0,
+	STATE_2_STEP1,
+	STATE_2_STEP2,
+	STATE_2_STEP3,
+	
+	STATE_4_STEP0,
+	STATE_4_STEP1,
+	STATE_4_STEP2,
+	STATE_4_STEP3,
+	FACTORY_MODE_SAVE_OR_CANSEL,
+	STATE_NONE
+};
+
 
 #define __JOIN4(A,B,C,D) A##B##C##D
 #define PBinit(Px, Bn, dir, up_pull_ON, HISPD_ON_or_INT_ON) __JOIN4(P,Px,_DDR_DDR,Bn)  =  dir; __JOIN4(P,Px,_CR1_C1,Bn)  =  up_pull_ON; __JOIN4(P,Px,_CR2_C2,Bn)  =  HISPD_ON_or_INT_ON
@@ -178,11 +235,7 @@ typedef void              v;
 
 
 #define eeprom_write_lock() FLASH_IAPSR_DUL = 0
+#define DARK 0x0000
 
-enum
-{ STRONGBLINK = 0,
-  WEAKBLINK,
-  FULLBRIGHT
-};
 
 #endif //#ifndef GENARAL_H

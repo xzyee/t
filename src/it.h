@@ -4,7 +4,7 @@
 extern u16 _setV;//TIM4线程专用
 extern u16 _setI;//TIM4线程专用
 
-
+extern u8 btn_down_time;
 
 extern u8 user_timer1;
 
