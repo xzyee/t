@@ -9,6 +9,65 @@
 /******************************************************************************/
 //CONTINUOUS_ADJUSTMENT_MODE_I:
 /******************************************************************************/
+static void animation(u8 rd, u8 state)
+{
+	
+	clear_showing_data();
+	u8 cnt;
+	cnt = rd ? 1 : 5;
+	while(1)
+	{//读取提示动画
+		switch(cnt){//动画处理
+		case 1:
+			showing_data[3] = Dpy_wei_3&(~_Dpy_duan_C);
+			showing_data[4] = Dpy_wei_4&(~_Dpy_duan_E);
+			cnt = rd ? 2 :0 ;
+		break;
+		case 2:
+			showing_data[3] = Dpy_wei_3&(~_Dpy_duan_B);
+			showing_data[4] = Dpy_wei_4&(~_Dpy_duan_F);
+			cnt = rd ? 3 :1 ;
+		break;
+		case 3:
+			showing_data[3] = Dpy_wei_3&(~_Dpy_duan_A);
+			showing_data[4] = Dpy_wei_4&(~_Dpy_duan_A);
+			cnt = rd ? 4 :2 ;
+		break;
+		case 4:
+			showing_data[3] = 0x0000;
+			showing_data[4] = 0x0000;
+			showing_data[3] = Dpy_wei_2&(~_Dpy_duan_A);
+			showing_data[4] = Dpy_wei_5&(~_Dpy_duan_A);
+			cnt = rd ? 5 :3 ;
+		break;
+		case 5:
+			showing_data[2] = 0x0000;
+			showing_data[5] = 0x0000;
+			showing_data[3] = Dpy_wei_1&(~_Dpy_duan_A);
+			showing_data[4] = Dpy_wei_6&(~_Dpy_duan_A);
+			cnt = rd ? 6 : 4 ;
+		break;
+		default:
+			showing_data[1] = 0x0000;
+			showing_data[6] = 0x0000;
+			next_state = state;
+			return;
+		}
+		btn_event = 0;
+		user_timer1 = 5;
+		do{
+			chkbmq();
+			if(btn_event == TURN_NONE )continue;
+			switch(btn_event)
+			{
+				case TURN_RIGHT://编码器正转
+				case TURN_LEFT://编码器反转
+				next_state = SETING_STORAGE_READ2; 
+				return;
+			}
+		}while(user_timer1);
+	} 
+}
 
 static void comm_save_vi(u8 e)
 {
@@ -30,7 +89,7 @@ static void comm_save_vi(u8 e)
 
 static void continuous_adjustment_vi_entry()
 {
-  showing_data[0] = 0x0000;
+  
   is_output_ON = 1;
   pos = 0;
   
@@ -38,7 +97,7 @@ static void continuous_adjustment_vi_entry()
   flashing_style[0] = WEAKBLINK;//半亮<->全亮闪烁模式
 }
 
-static void continuous_adjustment_i_before()
+static void continuous_adjustment_i_while()
 {
 	setI = bmq_turn_mgr_seting_data;
 	output_PWM_update = 1;
@@ -73,8 +132,8 @@ void do_continuous_adjustment_i()
 		0,
 		NULL,
 		continuous_adjustment_vi_entry,
-		continuous_adjustment_i_before,
-		NULL,/*while*/
+		NULL,/*before*/
+                continuous_adjustment_i_while,
 		continuous_adjustment_i_after,
 		0
 	);
@@ -83,12 +142,14 @@ void do_continuous_adjustment_i()
 /******************************************************************************/
 //CONTINUOUS_ADJUSTMENT_MODE_V: 
 /******************************************************************************/
+extern void do_read_animation(); 
 
 
-static void continuous_adjustment_v_before()
+static void continuous_adjustment_v_while()
 {
 	setV = bmq_turn_mgr_seting_data;
 	output_PWM_update = 1;
+
 
 	main_u8x = FULLBRIGHT;
 	main_u16x = nowI;//传参给下面这个函数
@@ -120,8 +181,8 @@ void do_continuous_adjustment_v()
 		0,
 		NULL,
 		continuous_adjustment_vi_entry,
-		continuous_adjustment_v_before,
-		NULL,/*while*/
+		NULL,/*before*/
+		continuous_adjustment_v_while,
 		continuous_adjustment_v_after,
 		0
 	);
@@ -167,64 +228,16 @@ void menu_set_storage()
 /******************************************************************************/  
 //SETING_STORAGE_READ:
 /******************************************************************************/  
+
 void do_read_animation()
 {
-	clear_showing_data_but34();
-	u8 cnt = 0;
-	while(1)
-	{//读取提示动画
-		switch(cnt){//动画处理
-		case 0:
-			showing_data[3] = Dpy_wei_3&(~_Dpy_duan_C);
-			showing_data[4] = Dpy_wei_4&(~_Dpy_duan_E);
-			cnt = 1;
-		break;
-		case 1:
-			showing_data[3] = Dpy_wei_3&(~_Dpy_duan_B);
-			showing_data[4] = Dpy_wei_4&(~_Dpy_duan_F);
-			cnt = 2;
-		break;
-		case 2:
-			showing_data[3] = Dpy_wei_3&(~_Dpy_duan_A);
-			showing_data[4] = Dpy_wei_4&(~_Dpy_duan_A);
-			cnt = 3;
-		break;
-		case 3:
-			showing_data[3] = 0x0000;
-			showing_data[4] = 0x0000;
-			showing_data[3] = Dpy_wei_2&(~_Dpy_duan_A);
-			showing_data[4] = Dpy_wei_5&(~_Dpy_duan_A);
-			cnt = 4;
-		break;
-		case 4:
-			showing_data[2] = 0x0000;
-			showing_data[5] = 0x0000;
-			showing_data[3] = Dpy_wei_1&(~_Dpy_duan_A);
-			showing_data[4] = Dpy_wei_6&(~_Dpy_duan_A);
-			cnt = 5;
-		break;
-		default:
-			showing_data[1] = 0x0000;
-			showing_data[6] = 0x0000;
-			next_state = SETING_STORAGE_READ2;
-			return;
-		}
-		btn_event = 0;
-		user_timer1 = 5;
-		do{
-			chkbmq();
-			if(btn_event == TURN_NONE )continue;
-			switch(btn_event)
-			{
-				case TURN_RIGHT://编码器正转
-				case TURN_LEFT://编码器反转
-				//next_state = SETING_STORAGE_READ2; 
-				return;
-			}
-		}while(user_timer1);
-
-	} 
+	animation(1, SETING_STORAGE_READ2);
 }
+
+
+
+
+
 
 /******************************************************************************/
 //SETING_STORAGE_READ2 超时返回
@@ -433,60 +446,9 @@ void do_seting_I()
 /******************************************************************************/
 void do_write_animation()
 {
-	/* clear_showing_data_but34();
-	u8 cnt = 0;
-	while(1)
-	{//读取提示动画
-		switch(cnt){//动画处理
-		case 0:
-
-			showing_data[3] = Dpy_wei_3&(~_Dpy_duan_C);
-			showing_data[4] = Dpy_wei_4&(~_Dpy_duan_E);
-			cnt = 1;
-		break;
-		case 1:
-			showing_data[3] = 0x0000;
-			showing_data[4] = 0x0000;
-			showing_data[3] = Dpy_wei_2&(~_Dpy_duan_A);
-			showing_data[4] = Dpy_wei_5&(~_Dpy_duan_A);
-			cnt = 2;
-		break;
-		case 2:
-			showing_data[3] = Dpy_wei_3&(~_Dpy_duan_A);
-			showing_data[4] = Dpy_wei_4&(~_Dpy_duan_A);
-			cnt = 3;
-		break;
-		case 3:
-			showing_data[3] = Dpy_wei_3&(~_Dpy_duan_B);
-			showing_data[4] = Dpy_wei_4&(~_Dpy_duan_F);
-			cnt = 4;
-		break;
-		case 4:
-			showing_data[3] = Dpy_wei_3&(~_Dpy_duan_C);
-			showing_data[4] = Dpy_wei_4&(~_Dpy_duan_E);
-			cnt = 5;
-		break;
-		default:
-			showing_data[1] = 0x0000;
-			showing_data[6] = 0x0000;
-			next_state = SETING_STORAGE_WRITE2;
-			return;
-		}
-		btn_event = 0;
-		user_timer1 = 5;
-		do{
-			chkbmq();
-			if(btn_event == TURN_NONE )continue;
-			switch(btn_event)
-			{
-				case TURN_RIGHT://编码器正转
-				case TURN_LEFT://编码器反转
-				//next_state = SETING_STORAGE_WRITE2; 
-				return;
-			}
-		}while(user_timer1);
-	}  */
+	animation(0, SETING_STORAGE_WRITE2);
 }
+
 
 
 /******************************************************************************/

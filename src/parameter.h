@@ -25,12 +25,12 @@
 #define MAX_USER_ITEM	5
 #define MIN_USER_ITEM	1
 
-#define COEFFICIENT_SETING_V_LIMIT 	12
-#define COEFFICIENT_SETING_I_LIMIT 	12
-#define COEFFICIENT_SETING_V_REF   	12
-#define COEFFICIENT_SETING_I_REF   	12
-#define COEFFICIENT_SETING_V       	12
-#define COEFFICIENT_SETING_I       	12
+#define COEFFICIENT_SETING_V_LIMIT 	3
+#define COEFFICIENT_SETING_I_LIMIT 	6
+#define COEFFICIENT_SETING_V_REF   	3
+#define COEFFICIENT_SETING_I_REF   	6
+#define COEFFICIENT_SETING_V       	3
+#define COEFFICIENT_SETING_I       	6
 #define COEFFICIENT_PWM            	1
 #define COEFFICIENT_ADJ_V          	12
 #define COEFFICIENT_ADJ_I          	12
@@ -55,14 +55,25 @@
 #define WAIT_TIME_FOR_SHORTSHORT_PUSH_COUNTS  (WAIT_TIME_FOR_SHORTSHORT_PUSH_MS/25) /*循环次数*/
 
 
-#define MAX_PWM_DATA 15000
+#define MAX_PWM_DATA 9999
 #define MIN_PWM_DATA 0
 
 #define MAX_V_LIMIT 12000 /*120V，电压乘以100倍*/
 #define MIN_V_LIMIT 0
 
-#define MAX_I_LIMIT 900 /*90A，电流乘以100倍*/
+#define MAX_I_LIMIT 900 /*90A，电流乘以10倍*/
 #define MIN_I_LIMIT 0
 
+/*温度*/
+
+#define WD_77 7963  /*77度*/
+#define WD_75 8400  /*75度*/
+#define WD_70 9718  /*70度*/
+#define WD_65 11244 /*65度*/
+#define WD_60 13004 /*60度*/
+#define WD_55 15019 /*55度*/
+#define WD_50 17309 /*50度*/
+#define WD_45 19806 /*45度*/
+#define WD_40 22557 /*40度*/
 
 #endif //#ifndef PARAMETER_H

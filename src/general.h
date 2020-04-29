@@ -33,6 +33,17 @@ enum{
   FULLBRIGHT
 };
 
+
+enum{
+	Vlim = 2,
+	Vcal = 3
+};
+
+enum{
+	Ilim = 2,
+	Ical = 3
+};
+
 enum {
 	WAITING_TO_FACTORY_MODE,
 	START_UP,

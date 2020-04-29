@@ -24,8 +24,8 @@ u16 nowV = 0;//比例：537 = 53.7V
 u16 nowI_16bit_ADC_result = 0;
 u16 nowI = 0;//比例：125 = 12.5A
 
-u16 set_V_limit = 1000; //电压设置限制
-u16 set_I_limit = 500;  //电流设置限制
+u16 set_V_limit; //电压设置限制
+u16 set_I_limit;  //电流设置限制
 
 s16 seting_data[11];
 
@@ -39,6 +39,7 @@ u16 main_u16x;//此变量为临时多用变量，只能在main线程内使用，
 u8 pos = 0;
 
 static void Init();
+
 
 
 #pragma optimize = low
@@ -75,7 +76,7 @@ while(1)
 		btn_event = 0;
 		main_u16x = 12;//WAIT_TIME_FOR_GOING_TO_FACTORY_MENU_COUNTS;
 		next_state = START_UP;
-		
+				
 		while(main_u16x)
 		{
 			bmq_wait_event();
@@ -96,6 +97,12 @@ while(1)
 		case START_UP:
 		/******************************************************************************/
 		{//读取EEPROM工厂模式的参数
+		
+			main_u8x = EEPROM_ADDR_START_LIMIT;
+			eeprom_read_addrx8();
+			set_V_limit = eeprom_buf1;
+			set_I_limit = eeprom_buf2;
+  
 			main_u8x = EEPROM_ADDR_START_CAL_DATA;
 			eeprom_read_addrx8();
 			PWM_V_bias = eeprom_buf1;
@@ -122,15 +129,6 @@ while(1)
 			eeprom_read_addrx8();
 			setV = eeprom_buf1;
 			setI = eeprom_buf2;
-		}
-
-		{//读取EEPROM限制电压电流
-			main_u8x = EEPROM_ADDR_START_LIMIT;
-			eeprom_read_addrx8();
-			set_V_limit = eeprom_buf1;
-			//if(set_V_limit<500)  set_V_limit = 500;
-			set_I_limit = eeprom_buf2;
-			//if(set_I_limit<400)  set_I_limit = 400;
 		}
 
 			is_output_ON = 0; //开机要求不输出两路基准
@@ -208,6 +206,7 @@ while(1)
 						if(next_state != SETING_STORAGE_READ)
 						{
 							is_output_ON = is_output_ON ? 0 : 1;//切换：打开输出/关闭输出
+							PD3O = is_output_ON ? 0 : 1;
 							output_PWM_update = 1;
 							next_state = MAIN_UI; 
 						}
@@ -225,16 +224,7 @@ while(1)
 						}
                                                 break;
 					case TURN_BUTTONDOWN_LONGLONG://按钮长按3秒
-						user_timer1 = 64; /*1.6s*/
-						main_u8x = user_timer1; main_u16x = PWM >> 6;
-						while(1)
-						{
-							if(user_timer1 == main_u8x) continue;//25ms坎未到
-							main_u8x = user_timer1;
-							PWM = ( PWM > main_u16x ) ? PWM - main_u16x : 0; //逐渐减小至0
-							set_V_PWM();
-							if(PWM == 0) is_output_ON = 0; clear_by_null();
-						};//永远循环，只能关机
+						shutdown();
 						break;
 					default:
 						break;
@@ -301,104 +291,13 @@ while(1)
 		/******************************************************************************/
 		do_seting_storage_write2();
 		next_state = MAIN_UI; break;
-
-
-
-		/******************************************************************************/  
-		case FACTORY_MODE://工厂模式
-		/******************************************************************************/
-
-		seting_data[0] = 1;//最左边的数码管的数字
-
-		main_u8x = EEPROM_ADDR_START_CAL_RAW;
-		eeprom_read_addrx8();
-		seting_data[1] = eeprom_buf1;
-		seting_data[2] = eeprom_buf2;
-
-		main_u8x = EEPROM_ADDR_START_CAL_RAW + 1;
-		eeprom_read_addrx8();
-		seting_data[3] = eeprom_buf1; //Vref
-		seting_data[4] = eeprom_buf2;
-
-		main_u8x = EEPROM_ADDR_START_CAL_RAW + 2;
-		eeprom_read_addrx8();
-		seting_data[5] = eeprom_buf1;
-		seting_data[6] = eeprom_buf2;
-
-		main_u8x = EEPROM_ADDR_START_CAL_RAW + 3;
-		eeprom_read_addrx8();
-		seting_data[7] = eeprom_buf1;
-		seting_data[8] = eeprom_buf2;//Iref
-
-		main_u8x = EEPROM_ADDR_START_CAL_RAW + 4;
-		eeprom_read_addrx8();
-		seting_data[9]  = eeprom_buf1;
-		seting_data[10] = eeprom_buf2;
-
-		// trim something ???
-		if(seting_data[3]<100 || seting_data[3]>12000){
-		seting_data[3] = 12000;
-		}
-		if(seting_data[8]<100 || seting_data[8]>900){
-		seting_data[8] = 900;
-		}
-
-		flashing_style[0] = STRONGBLINK;//灭<->亮闪烁模式
-		next_state = FACTORY_MODE_PREV_MENU;
-		break;
-
-		/******************************************************************************/  
-		case FACTORY_MODE_PREV_MENU:
-		/******************************************************************************/
-		flashing_FSM = 0;
-		next_state = FACTORY_MODE_MENU;
-
-		/******************************************************************************/  
-		case FACTORY_MODE_MENU:
-		/******************************************************************************/
-			show_factory_mode_menu();
-			break;
-
-		case FACTORY_MODE_SET_0_5V_OR_0_5A_REF:
-			do_set_0p5V_or_0p5A_ref();
-			break;
-
-		case STATE_2_STEP0:
-		do_factory_frame_menu_V();//显示方框菜单
-		break;
-		case STATE_2_STEP1: //设置极限电压
-		do_factory_set_V_limit();
-		next_state = STATE_2_STEP0;
-		break;
-		case STATE_2_STEP2: //设置校准电压
-		//do_read_animation(); do_read_animation();
-		do_factory_set_V_ref();
-		next_state = STATE_2_STEP3;
-		break;
-		case STATE_2_STEP3: //校准此校准电压
-		do_factory_cal_V_ref();
-		next_state = FACTORY_MODE_MENU;
-		break;
-		case STATE_4_STEP0: //设置极限电流
-		do_factory_frame_menu_V();//显示方框菜单
-		break;
-		case STATE_4_STEP1: //设置极限电流
-		do_factory_set_I_limit();
-		next_state = STATE_4_STEP0;
-		break;
-		case STATE_4_STEP2: //设置校准电流
-		do_factory_set_I_ref();
-		next_state = STATE_4_STEP3;
-		break;
-		case STATE_4_STEP3: //校准此校准电流
-		do_factory_cal_I_ref();
-		next_state = FACTORY_MODE_MENU;
-		break;
-
-		case FACTORY_MODE_SAVE_OR_CANSEL:
-		do_factory_mode_save();
-		break;
 		
+		#include "factory.c"
+		
+		default: break;
+
+
+
 		}
 	}
 }
@@ -556,7 +455,27 @@ static void Init()
   {
     PBinit(C,5,1,1,0);//风扇控制
     PC5O = 0;
-	PBinit(D,2,1,1,0);//X控制
-	PD2O = 1;//开机要求输出高电平
+	PBinit(D,3,1,1,0);//X控制
+	PD3O = 1;//开机要求输出高电平
   }
+}
+
+void shutdown()
+{
+	clear_by_null();
+	if(is_output_ON)
+	{	
+		user_timer1 = 64; /*1.6s*/
+		main_u8x = user_timer1; main_u16x = PWM >> 6;
+		setV_update(); // get PWM
+		while(1)
+		{
+			if(user_timer1 == main_u8x ) continue;//25ms坎未到
+			main_u8x = user_timer1;
+			PWM = ( PWM > main_u16x ) ? PWM - main_u16x : 0; //逐渐减小至0
+			set_V_PWM();
+			if(PWM == 0) {is_output_ON = 0; clear_by_null();PD3O = 1;}
+		};//永远循环，只能关机
+	}
+	while(1);
 }

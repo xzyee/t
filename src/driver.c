@@ -17,13 +17,19 @@
     120-151     工厂模式的隐式参数       32字节
 */
 
+#define BYTES_EEPROM_ADDR_START_DEFAULT   8
+#define BYTES_EEPROM_ADDR_START_USER      40
+#define BYTES_EEPROM_ADDR_START_LIMIT     8
+#define BYTES_EEPROM_ADDR_START_CAL_RAW   40
+#define BYTES_EEPROM_ADDR_START_CAL_DATA  32
+
 /*
     【EEPROM空间分配情况】
-    0-7         开机默认电压电流        8字节
-	8-15        出厂限制电压电流        8字节
-    16-55        9组存储电压电流        40字节
-    56-95      工厂模式的显式参数       40字节
-    96-127     工厂模式的隐式参数       32字节
+	开机默认电压电流         8字节
+	9组存储电压电流         40字节
+	出厂限制电压电流         8字节
+	工厂模式的显式参数      40字节
+	工厂模式的隐式参数      32字节
 */
 
   /*
@@ -66,6 +72,25 @@ void clear_by_null()
 	showing_data[4] = Dpy_wei_4 & Dpy_duan_null;
 	showing_data[5] = Dpy_wei_5 & Dpy_duan_null;
 	showing_data[6] = Dpy_wei_6 & Dpy_duan_null;
+}
+
+void dark0123()
+{
+	showing_data[0] = DARK;
+	showing_data[1] = DARK;
+	showing_data[2] = DARK;
+	showing_data[3] = DARK;
+}
+void dark012()
+{
+	showing_data[0] = DARK;
+	showing_data[1] = DARK;
+	showing_data[2] = DARK;
+}
+void dark23()
+{
+	showing_data[2] = DARK;
+	showing_data[3] = DARK;
 }
 
 void hc595_update(){
@@ -471,8 +496,9 @@ void display_PWM_value()
   showing_data[5] = Dpy_wei_5 & duanma[mod()];
   showing_data[4] = Dpy_wei_4 & duanma[mod()];
   showing_data[3] = Dpy_wei_3 & duanma[mod()];
+  showing_data[2] = Dpy_wei_2 & duanma[mod()];
   
-  set_brightness(main_u8x,_Dpy_wei_3 | _Dpy_wei_4 | _Dpy_wei_5 | _Dpy_wei_6);
+  set_brightness(main_u8x,_Dpy_wei_2 | _Dpy_wei_3 | _Dpy_wei_4 | _Dpy_wei_5 | _Dpy_wei_6);
 }
 
 
@@ -511,7 +537,15 @@ void bmq_wait_event()
   user_timer1 = 10;
   do{
     chkbmq();
-    if(btn_event) return;
+    if(btn_event) 
+	{
+		if(btn_event == TURN_BUTTONDOWN_LONG)
+		{
+			while(btn_status);
+			btn_event = TURN_BUTTONDOWN_LONG;
+		}	
+		return;
+	} 
   }while(user_timer1);
 }
 

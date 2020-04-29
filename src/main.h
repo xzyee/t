@@ -27,6 +27,7 @@ extern u16 main_u16x;
 
 extern u8 pos;
 extern void Init();
+extern void shutdown();
 
 #endif //#ifndef MAIN_H
 

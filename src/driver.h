@@ -86,6 +86,9 @@ extern u8  UI_time_out;
 extern u8  btn_event;//按钮事件，0x01 = 编码器正转，0xFF = 编码器反转，02 = 按钮短按，03 = 按钮长按
 
 extern void clear_by_null();
+extern void dark012();
+extern void dark0123();
+extern void dark23();
 
 extern void clear_showing_data();
 extern void clear_showing_data_but34();

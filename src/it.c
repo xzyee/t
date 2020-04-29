@@ -4,7 +4,7 @@
 #include "main.h"
 #include "parameter.h"
 
-static u8 btn_status = 1;
+u8 btn_status = 1;
 u8 btn_down_time = 0;
 
 u16 _setV = 0;//TIM4线程专用
@@ -14,7 +14,7 @@ static u16 output_I_limit;
 static u16 _adc_buf[4];
 
 static u16 adc_buf = 0;
-static u8  adc_now_ch = 0;//0是主温度，1是电压，2是电流，3是整流温度
+static u8  adc_now_ch = 1; //1是电压，2是电流，3是整流温度
 static u8  adc_step = 0;
 static u8  adc_count;
 
@@ -152,18 +152,6 @@ __interrupt void TIM4_Init()
   
       switch(adc_now_ch)
     {
-    
-      case 0:
-        //之前是主温度ADC
-        //adc_buf数值 17316 = 4.1V，2111 = 0.5V
-        if(adc_buf >= 17316 || adc_buf < 2111)
-        {
-          is_fan_need_to_speed_up |= 1;
-        }
-        adc_now_ch = 1;//切换到电压ADC
-        ADC_CSR = 0x06;//选定ch6
-        break;
-    
       case 1:
         //之前是电压ADC
         nowV_16bit_ADC_result = adc_buf;
@@ -188,48 +176,56 @@ __interrupt void TIM4_Init()
         ADC_CSR = 0x03;//选定ch3
         break;
     
-      default:
-        //之前是整流温度ADC
-        if(adc_buf > 63000){//整流测温二极管开路
-          if(nowI > 50 && nowI > nowV && nowV < 400){
-            is_fan_need_to_speed_up |= 1;
-            
-            if(tim4_timer2 == 0)
-            {
-              output_I_limit = 400;//限流40A
-              tim4_timer3 = 200;
-            }
-          }
-          else
-          {
-            if(tim4_timer3 == 0)
-            {
-              output_I_limit = set_I_limit;//限流50A
-              tim4_timer2 = 200;
-            }
-          }
-        }
-    else
-    { //整流测温二极管正常
+      case 3:
+			//之前是整流温度ADC
+			//精度为5度左右
+			if(tim4_timer2 == 0)
+			{
+			if(adc_buf < WD_77) //温度高于77度
+			{
+				//关机
+				//shutdown();
+			}
+			else if(adc_buf < WD_75) //温度高于75度
+			{
+				//风扇全开
+				TIM2_CCR1H = 0xFF;
+				TIM2_CCR1L = 0xFF;
+			}
+			else if(adc_buf < WD_65) //温度高于65度
+			{
+				TIM2_CCR1H = 0xFF/2;
+				TIM2_CCR1L = 0xFF;
+				
+			}
+			else if(adc_buf < WD_55) //温度高于55度
+			{
+				TIM2_CCR1H = 0xFF/3;
+				TIM2_CCR1L = 0xFF;
+			}
+			else if(adc_buf < WD_40) //温度高于40度
+			{
+				//风扇按速度变化
+				TIM2_CCR1H = 0xFF/4;
+				TIM2_CCR1L = 0xFF;
+			}
+			else
+			{
+				//关闭风扇
+				TIM2_CCR1H = 0x0;
+				TIM2_CCR1L = 0x0;
+			}
+			tim4_timer2 = 200;
+			}
 
-        }//end else
-        
-        if(is_fan_need_to_speed_up)
-        {
-          if(TIM2_CCR1H != 0xFF) TIM2_CCR1H++;
-          TIM2_CCR1L = 0xFF;
-        }
-        else
-        {
-          if(TIM2_CCR1H) TIM2_CCR1H--;
-          TIM2_CCR1L = 0;
-        }
-    
-        is_fan_need_to_speed_up = 0;
-                
-        adc_now_ch = 0;//切换到主温度ADC
-        ADC_CSR = 0x04;//选定ch4
+			//is_fan_need_to_speed_up = 0;
+
+			adc_now_ch = 1;//切换到电压ADC
+			ADC_CSR = 0x06;//选定ch6
         break;
+		
+		default:
+			break;
     
       }//switch(adc_now_ch)
       adc_step = 1;

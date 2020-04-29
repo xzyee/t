@@ -2,14 +2,6 @@
 #define FACTORY_FUN_H
 
 
-enum{
-	Vlim = 2,
-	Vcal = 3
-};
-enum{
-	Ilim = 2,
-	Ical = 3,
-};
 
 
 extern void show_factory_mode_menu();
